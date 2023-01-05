@@ -40,9 +40,6 @@ export interface AwsLambdaInstrumentationConfig extends InstrumentationConfig {
   responseHook?: ResponseHook;
   disableAwsContextPropagation?: boolean;
   //detectApiGateway?: boolean;
-  detectApiGateway?: {
-    enable: true,
-    errorCodes?: Array<RegExp | number>
-  }
+  detectTrigger?: boolean;
   eventContextExtractor?: EventContextExtractor;
 }
