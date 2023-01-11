@@ -38,6 +38,7 @@ import {
   ROOT_CONTEXT,
   Attributes,
   Link,
+  SpanContext,
 } from '@opentelemetry/api';
 import {
   AWSXRAY_TRACE_ID_HEADER,
@@ -654,8 +655,23 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
   ): OtelContext {
     let parent: OtelContext | undefined = undefined;
     if (!disableAwsContextPropagation) {
+      const clientContextParent = context.clientContext?.Custom["traceparent"];
       const lambdaTraceHeader = process.env[traceContextEnvironmentKey];
-      if (lambdaTraceHeader) {
+      console.info(`clientContextParent ${clientContextParent}`);
+      if (clientContextParent && typeof clientContextParent == 'string') {
+        // 00-63bd93184753e55036cdeb7648736bd1-2fac342bf09ddf9c-01
+        const regex = /^[0-9a-f]{2}-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/g;
+        const matches = regex.exec(clientContextParent)
+        if(matches) {
+          const spanContext: SpanContext = {
+            traceId: matches[1],
+            spanId: matches[2],
+            traceFlags: TraceFlags.SAMPLED, // TODO
+            isRemote: true,
+          }
+          parent = trace.setSpan( otelContext.active(), trace.wrapSpanContext(spanContext));
+        }
+      } else if (lambdaTraceHeader) {
         parent = awsPropagator.extract(
           otelContext.active(),
           { [AWSXRAY_TRACE_ID_HEADER]: lambdaTraceHeader },
