@@ -109,6 +109,8 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
       filename += '.js';
     }
 
+    diag.debug('TEST1')
+
     return [
       new InstrumentationNodeModuleDefinition(
         // NB: The patching infrastructure seems to match names backwards, this must be the filename, while
@@ -137,7 +139,26 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
           ),
         ]
       ),
-    ];
+      new InstrumentationNodeModuleDefinition(
+        // NB: The patching infrastructure seems to match names backwards, this must be the filename, while
+        // InstrumentationNodeModuleFile must be the module name.
+        module,
+        ['*'],
+        (moduleExports: LambdaModule) => {
+          diag.debug('Applying patch for lambda handler 2');
+          if (isWrapped(moduleExports[functionName])) {
+            this._unwrap(moduleExports, functionName);
+          }
+          this._wrap(moduleExports, functionName, this._getHandler());
+          return moduleExports;
+        },
+        (moduleExports?: LambdaModule) => {
+          if (moduleExports == undefined) return;
+          diag.debug('Removing patch for lambda handler 2');
+          this._unwrap(moduleExports, functionName);
+        }
+      ),
+    ]
   }
 
   private _getHandler() {
