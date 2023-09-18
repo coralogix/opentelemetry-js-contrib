@@ -15,25 +15,31 @@
  */
 import {
   Attributes,
-  Link, propagation,
+  Link,
+  propagation,
   SpanKind,
   TextMapGetter,
   trace,
 } from '@opentelemetry/api';
-import {SemanticAttributes} from '@opentelemetry/semantic-conventions';
-import {context as otelContext} from '@opentelemetry/api/build/src/context-api';
+import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import { context as otelContext } from '@opentelemetry/api/build/src/context-api';
 import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import {APIGatewayProxyEventHeaders, SQSEvent, SQSMessageAttributes, SQSRecord} from 'aws-lambda';
-import {isDefined} from '../utils';
+import {
+  APIGatewayProxyEventHeaders,
+  SQSEvent,
+  SQSMessageAttributes,
+  SQSRecord,
+} from 'aws-lambda';
+import { isDefined } from '../utils';
 import {
   LambdaTrigger,
   TriggerSpanInitializerResult,
   validateRecordsEvent,
 } from './common';
-import {TriggerOrigin} from './index';
+import { TriggerOrigin } from './index';
 
 const sqsAttributes: Attributes = {
   [SemanticAttributes.FAAS_TRIGGER]: 'pubsub',
@@ -64,8 +70,10 @@ const sqsAttributeGetter: TextMapGetter<SQSMessageAttributes> = {
 const isSQSEvent = validateRecordsEvent<SQSEvent>('aws:sqs');
 
 function getSQSRecordLink(record: SQSRecord): Link[] {
-  return [getSqsLinkFromMessageAttributes(record), getSqsLinkFromSystemMessageAttributes(record)]
-    .filter(isDefined)
+  return [
+    getSqsLinkFromMessageAttributes(record),
+    getSqsLinkFromSystemMessageAttributes(record),
+  ].filter(isDefined);
 }
 
 /*
@@ -75,7 +83,7 @@ function getSQSRecordLink(record: SQSRecord): Link[] {
   https://github.com/open-telemetry/opentelemetry-js-contrib/blob/main/plugins/node/opentelemetry-instrumentation-aws-sdk/src/services/sqs.ts#L102
  */
 function getSqsLinkFromMessageAttributes(record: SQSRecord): Link | undefined {
-  const {messageAttributes} = record ?? {};
+  const { messageAttributes } = record ?? {};
   if (!messageAttributes) return undefined;
   const extractedContext = propagation.extract(
     otelContext.active(),
@@ -84,30 +92,32 @@ function getSqsLinkFromMessageAttributes(record: SQSRecord): Link | undefined {
   );
   const context = trace.getSpan(extractedContext)?.spanContext();
   if (!context) return undefined;
-  return {context};
+  return { context };
 }
 
 /*
   as defined here
   https://opentelemetry.io/docs/specs/otel/trace/semantic_conventions/instrumentation/aws-lambda/#sqs-event
  */
-function getSqsLinkFromSystemMessageAttributes(record: SQSRecord): Link | undefined {
-  const {AWSTraceHeader} = record?.attributes ?? {};
+function getSqsLinkFromSystemMessageAttributes(
+  record: SQSRecord
+): Link | undefined {
+  const { AWSTraceHeader } = record?.attributes ?? {};
   if (!AWSTraceHeader) return undefined;
   const extractedContext = awsPropagator.extract(
     otelContext.active(),
-    {[AWSXRAY_TRACE_ID_HEADER]: AWSTraceHeader},
+    { [AWSXRAY_TRACE_ID_HEADER]: AWSTraceHeader },
     headerGetter
   );
   const context = trace.getSpan(extractedContext)?.spanContext();
   if (!context) return undefined;
-  return {context};
+  return { context };
 }
 
 function sqsSpanInitializer(event: SQSEvent): TriggerSpanInitializerResult {
-  const {Records: records} = event;
+  const { Records: records } = event;
 
-  const sources = new Set(records.map(({eventSourceARN}) => eventSourceARN));
+  const sources = new Set(records.map(({ eventSourceARN }) => eventSourceARN));
 
   const source =
     (sources.size === 1 && sources.values()!.next()!.value) ||
@@ -119,8 +129,7 @@ function sqsSpanInitializer(event: SQSEvent): TriggerSpanInitializerResult {
     'messaging.batch.message_count': records.length,
   };
 
-  let links: Link[] | undefined = records
-    .flatMap(getSQSRecordLink)
+  let links: Link[] | undefined = records.flatMap(getSQSRecordLink);
 
   links = links?.length === 0 ? undefined : links;
 
@@ -130,7 +139,7 @@ function sqsSpanInitializer(event: SQSEvent): TriggerSpanInitializerResult {
     attributes,
     links,
   };
-  return {name, options, origin: TriggerOrigin.SQS};
+  return { name, options, origin: TriggerOrigin.SQS };
 }
 
 export const SQSTrigger: LambdaTrigger<SQSEvent> = {

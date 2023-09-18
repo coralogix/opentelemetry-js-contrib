@@ -16,7 +16,7 @@
 import { EventBridgeEvent } from 'aws-lambda';
 import { Attributes, SpanKind } from '@opentelemetry/api';
 import { LambdaTrigger, TriggerSpanInitializerResult } from './common';
-import {TriggerOrigin} from "./index";
+import { TriggerOrigin } from './index';
 
 const isEventBridgeEvent = (
   event: any
