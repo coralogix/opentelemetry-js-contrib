@@ -27,12 +27,7 @@ import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import {
-  APIGatewayProxyEventHeaders,
-  SQSEvent,
-  SQSMessageAttributes,
-  SQSRecord,
-} from 'aws-lambda';
+import { APIGatewayProxyEventHeaders, SQSEvent, SQSRecord } from 'aws-lambda';
 import { isDefined } from '../utils';
 import {
   LambdaTrigger,
@@ -40,6 +35,7 @@ import {
   validateRecordsEvent,
 } from './common';
 import { TriggerOrigin } from './index';
+import { defaultTextMapGetter } from '@opentelemetry/api/build/src/propagation/TextMapPropagator';
 
 const sqsAttributes: Attributes = {
   [SemanticAttributes.FAAS_TRIGGER]: 'pubsub',
@@ -55,15 +51,6 @@ const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
   },
   get(carrier, key: string) {
     return carrier[key];
-  },
-};
-
-const sqsAttributeGetter: TextMapGetter<SQSMessageAttributes> = {
-  keys(carrier): string[] {
-    return Object.keys(carrier);
-  },
-  get(carrier, key: string) {
-    return carrier[key]?.stringValue;
   },
 };
 
@@ -88,7 +75,7 @@ function getSqsLinkFromMessageAttributes(record: SQSRecord): Link | undefined {
   const extractedContext = propagation.extract(
     otelContext.active(),
     messageAttributes,
-    sqsAttributeGetter
+    defaultTextMapGetter
   );
   const context = trace.getSpan(extractedContext)?.spanContext();
   if (!context) return undefined;
