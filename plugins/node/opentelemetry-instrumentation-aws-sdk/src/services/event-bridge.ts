@@ -13,10 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {context, defaultTextMapSetter, diag, propagation, Span, SpanKind, Tracer,} from '@opentelemetry/api';
-import {RequestMetadata, ServiceExtension} from './ServiceExtension';
-import {AwsSdkInstrumentationConfig, NormalizedRequest, NormalizedResponse,} from '../types';
-import {PutEventsRequest, PutEventsRequestEntry,} from 'aws-sdk/clients/eventbridge';
+import {
+  context,
+  defaultTextMapSetter,
+  diag,
+  propagation,
+  Span,
+  SpanKind,
+  Tracer,
+} from '@opentelemetry/api';
+import { RequestMetadata, ServiceExtension } from './ServiceExtension';
+import {
+  AwsSdkInstrumentationConfig,
+  NormalizedRequest,
+  NormalizedResponse,
+} from '../types';
+import {
+  PutEventsRequest,
+  PutEventsRequestEntry,
+} from 'aws-sdk/clients/eventbridge';
 
 const CONTEXT_KEY = '_context';
 type EventBridgeDetailWithContext = { [CONTEXT_KEY]?: object } & object;
