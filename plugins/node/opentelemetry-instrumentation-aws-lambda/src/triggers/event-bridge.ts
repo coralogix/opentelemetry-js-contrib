@@ -102,7 +102,7 @@ function initializeEventBridgeSpan(
   const link = extractEventBridgeLink(event);
   const links = link ? [link] : undefined;
   const options: SpanOptions = {
-    kind: SpanKind.SERVER,
+    kind: SpanKind.CONSUMER,
     attributes,
     links,
   };
