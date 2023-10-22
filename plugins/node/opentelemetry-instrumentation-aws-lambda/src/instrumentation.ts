@@ -396,6 +396,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
     lambdaResponse: any,
     errorFromLambda: string | Error | null | undefined,
   ) {
+    if(!span.isRecording()){
+      return;
+    }
+
     if (errorFromLambda) {
       span.recordException(errorFromLambda);
 
@@ -468,6 +472,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
   }
 
   private _endSpan(span: Span, err: string | Error | null | undefined) {
+    if(!span.isRecording()) {
+      return;
+    }
+
     if (err) {
       span.recordException(err);
     }
