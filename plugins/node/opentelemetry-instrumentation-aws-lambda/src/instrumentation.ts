@@ -79,6 +79,9 @@ const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
 export const traceContextEnvironmentKey = '_X_AMZN_TRACE_ID';
 export const xForwardProto = 'X-Forwarded-Proto';
 
+console.log("console.log works")
+diag.debug('diag.debug works')
+
 export class AwsLambdaInstrumentation extends InstrumentationBase {
   private triggerOrigin: TriggerOrigin | undefined;
   private _traceForceFlusher?: () => Promise<void>;
@@ -123,15 +126,23 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
 
     // Lambda loads user function using an absolute path.
     let filename = path.resolve(taskRoot, moduleRoot, module);
-    if (!filename.endsWith('.js')) {
-      // its impossible to know in advance if the user has a cjs or js file.
-      // check that the .js file exists otherwise fallback to next known possibility
+    if (!filename.includes('.')) {
+      // The filename has no extension, we need to check if there is a .js, .cjs or .mjs file
       try {
         fs.statSync(`${filename}.js`);
         filename += '.js';
       } catch (e) {
-        // fallback to .cjs
-        filename += '.cjs';
+        try {
+          fs.statSync(`${filename}.cjs`);
+          filename += '.cjs';
+        } catch (e) {
+          try {
+            fs.statSync(`${filename}.mjs`);
+            filename += '.mjs';
+          } catch (e) {
+            diag.warn(`AwsLambdaInstrumentation couldn't find the handler file: ${filename}`);
+          }
+        }
       }
     }
 
