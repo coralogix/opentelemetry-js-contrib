@@ -146,6 +146,16 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
       }
     }
 
+    console.log('Instrumenting lambda handler', {
+      taskRoot,
+      handlerDef,
+      handler,
+      moduleRoot,
+      module,
+      filename,
+      functionName,
+    })
+
     diag.debug('Instrumenting lambda handler', {
       taskRoot,
       handlerDef,
@@ -170,6 +180,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
             module,
             ['*'],
             (moduleExports: LambdaModule) => {
+              console.log('Applying patch for lambda handler')
               diag.debug('Applying patch for lambda handler');
               if (isWrapped(moduleExports[functionName])) {
                 this._unwrap(moduleExports, functionName);
