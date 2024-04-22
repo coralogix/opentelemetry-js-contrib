@@ -215,6 +215,25 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
           this._unwrap(moduleExports, functionName);
         }
       ),
+      // This approach works when the handler is an .mjs file in the function source code
+      new InstrumentationNodeModuleDefinition(
+        filename,
+        ['*'],
+        (moduleExports: LambdaModule) => {
+          console.log('Applying patch for lambda handler 3')
+          diag.debug('Applying patch for lambda handler');
+          if (isWrapped(moduleExports[functionName])) {
+            this._unwrap(moduleExports, functionName);
+          }
+          this._wrap(moduleExports, functionName, this._getHandler());
+          return moduleExports;
+        },
+        (moduleExports?: LambdaModule) => {
+          if (moduleExports === undefined) return;
+          diag.debug('Removing patch for lambda handler');
+          this._unwrap(moduleExports, functionName);
+        }
+      ),
     ];
   }
 
