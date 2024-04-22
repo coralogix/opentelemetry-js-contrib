@@ -205,7 +205,6 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
         filename,
         ['*'],
         (moduleExports: LambdaModule) => {
-          console.log('Applying patch for lambda handler 3')
           diag.debug('Applying patch for lambda handler');
           if (isWrapped(moduleExports[functionName])) {
             this._unwrap(moduleExports, functionName);
