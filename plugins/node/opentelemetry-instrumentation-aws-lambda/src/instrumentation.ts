@@ -79,9 +79,6 @@ const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
 export const traceContextEnvironmentKey = '_X_AMZN_TRACE_ID';
 export const xForwardProto = 'X-Forwarded-Proto';
 
-console.log("console.log works")
-diag.debug('diag.debug works')
-
 export class AwsLambdaInstrumentation extends InstrumentationBase {
   private triggerOrigin: TriggerOrigin | undefined;
   private _traceForceFlusher?: () => Promise<void>;
