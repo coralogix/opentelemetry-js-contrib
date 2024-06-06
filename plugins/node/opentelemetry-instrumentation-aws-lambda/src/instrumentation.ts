@@ -228,11 +228,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
   //   };
   // }
 
-  public getPatchHandler(original: Handler) {
-    this._getPatchHandler(original)
+  public getPatchHandler(original: Handler): Handler {
+    return this._getPatchHandler(original)
   }
 
-  private _getPatchHandler(original: Handler) {
+  private _getPatchHandler(original: Handler): Handler {
     diag.debug('patch handler function');
     const plugin = this;
 
