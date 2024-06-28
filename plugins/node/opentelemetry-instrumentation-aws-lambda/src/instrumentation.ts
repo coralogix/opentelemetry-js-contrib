@@ -66,6 +66,9 @@ import {
   LambdaAttributes,
   TriggerOrigin,
 } from './triggers';
+
+diag.debug("Loading AwsLambdaInstrumentation")
+
 const awsPropagator = new AWSXRayPropagator();
 const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
   keys(carrier): string[] {
