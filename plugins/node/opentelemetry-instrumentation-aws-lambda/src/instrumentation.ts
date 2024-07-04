@@ -52,7 +52,6 @@ import {
 import { AwsLambdaInstrumentationConfig, EventContextExtractor } from './types';
 import { VERSION } from './version';
 import { env } from 'process';
-// import { LambdaModule } from './internal-types';
 import { strict } from 'assert';
 import {
   finalizeSpan,
