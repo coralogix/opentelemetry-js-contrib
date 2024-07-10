@@ -115,6 +115,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
       context: Context,
       callback: Callback
     ) {
+      diag.debug(`patchedHandler 1`);
       const config = plugin._config;
       const parent = AwsLambdaInstrumentation._determineParent(
         event,
@@ -126,11 +127,13 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
 
       const name = context.functionName;
 
+      diag.debug(`patchedHandler 2`);
       const { triggerSpan, triggerOrigin } =
         AwsLambdaInstrumentation._getTriggerSpan(plugin, event, parent) ?? {};
       plugin.triggerOrigin = triggerOrigin;
 
       const inner = (otelContextInstance: OtelContext) => {
+        diag.debug(`inner 1`);
         const lambdaSpan = plugin.tracer.startSpan(
           name,
           {
@@ -146,11 +149,16 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
           },
           otelContextInstance
         );
+        diag.debug(`inner 2`);
 
         if (config.requestHook) {
           safeExecuteInTheMiddle(
-            () => config.requestHook!(lambdaSpan, { event, context }),
+            () => {
+              diag.debug(`inner 3`);
+              return config.requestHook!(lambdaSpan, { event, context })
+            },
             e => {
+              diag.debug(`inner 4`);
               if (e)
                 diag.error('aws-lambda instrumentation: requestHook error', e);
             },
@@ -158,9 +166,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
           );
         }
 
+        diag.debug(`inner 5`);
         return otelContext.with(
           trace.setSpan(otelContextInstance, lambdaSpan),
           () => {
+            diag.debug(`inner 6`);
             // Lambda seems to pass a callback even if handler is of Promise form, so we wrap all the time before calling
             // the handler and see if the result is a Promise or not. In such a case, the callback is usually ignored. If
             // the handler happened to both call the callback and complete a returned Promise, whichever happens first will
@@ -172,10 +182,16 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
               triggerSpan
             );
 
+            diag.debug(`inner 7`);
             const maybePromise = safeExecuteInTheMiddle(
-              () => original.apply(this, [event, context, wrappedCallback]),
+              () => {
+                diag.debug(`inner 8`);
+                return original.apply(this, [event, context, wrappedCallback])
+              },
               error => {
+                diag.debug(`inner 9`);
                 if (error != null) {
+                  diag.debug(`inner 9.1`);
                   // Exception thrown synchronously before resolving callback / promise.
                   // Callback may or may not have been called, we can't know for sure, but it doesn't matter, both will end the current span
                   plugin._applyResponseHook(lambdaSpan, error);
@@ -184,61 +200,82 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
               }
             ) as Promise<{}> | undefined;
             if (typeof maybePromise?.then === 'function') {
+              diag.debug(`inner 10`);
               return maybePromise.then(
                 value => {
+                  diag.debug(`inner 11`);
                   plugin._applyResponseHook(lambdaSpan, null, value);
                   plugin._endSpan(lambdaSpan, undefined);
+                  diag.debug(`inner 12`);
                   return value;
                 },
                 (err: Error | string) => {
+                  diag.debug(`inner 13`);
                   plugin._applyResponseHook(lambdaSpan, err);
 
                   plugin._endSpan(lambdaSpan, err);
+                  diag.debug(`inner 14`);
                   throw err;
                 }
               );
             }
+            diag.debug(`inner 15`);
             return maybePromise;
           }
         );
       };
 
+      diag.debug(`patchedHandler 3`);
       let handlerReturn: Promise<any> | undefined;
       if (!triggerSpan) {
         // No wrapper span
         try {
+          diag.debug(`patchedHandler 4`);
           handlerReturn = inner(parent);
+          diag.debug(`patchedHandler 5`);
         } catch (e) {
+          diag.debug(`patchedHandler 6.1`);
           // Catching a lambda that synchronously failed
 
           void plugin._flush();
+          diag.debug(`patchedHandler 6.2`);
           throw e;
         }
       } else {
+        diag.debug(`patchedHandler 7`);
         const subCtx = trace.setSpan(parent, triggerSpan);
+        diag.debug(`patchedHandler 8`);
         handlerReturn = otelContext.with(subCtx, () => {
           return safeExecuteInTheMiddle(
             () => {
+              diag.debug(`patchedHandler 9`);
               const innerResult = inner(subCtx); // This call never fails, because it either returns a promise, or was called with safeExecuteInTheMiddle
               // The handler was an async, it returned a promise.
+              diag.debug(`patchedHandler 9`);
               if (typeof innerResult?.then === 'function') {
+                diag.debug(`patchedHandler 10`);
                 return innerResult.then(
                   value => {
+                    diag.debug(`patchedHandler 11`);
                     strict(triggerSpan);
 
                     void plugin._endWrapperSpan(config, triggerSpan, value, undefined);
-
+                    diag.debug(`patchedHandler 12`);
                     return value;
                   },
                   async error => {
+                    diag.debug(`patchedHandler 13`);
                     strict(triggerSpan);
                     await plugin._endWrapperSpan(config, triggerSpan, undefined, error);
+                    diag.debug(`patchedHandler 14`);
                     throw error; // We don't want the instrumentation to hide the error from AWS
                   }
                 );
               } else {
+                diag.debug(`patchedHandler 15`);
                 // The lambda was synchronous, or it as synchronously thrown an error
                 strict(triggerSpan);
+                diag.debug(`patchedHandler 16`);
 
                 //if (hasLambdaSynchronouslyThrown) {
                 void plugin._endWrapperSpan(
@@ -247,16 +284,20 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
                   innerResult,
                   undefined
                 );
+                diag.debug(`patchedHandler 17`);
                 // }
                 // Fallthrough: sync reply, but callback may be in use. No way to query the event loop !
               }
-
+              diag.debug(`patchedHandler 18`);
               return innerResult;
             },
             error => {
+              diag.debug(`patchedHandler 19`);
               if (error) {
+                diag.debug(`patchedHandler 20`);
                 strict(triggerSpan);
                 void plugin._endWrapperSpan(config, triggerSpan, undefined, error);
+                diag.debug(`patchedHandler 21`);
                 void plugin._flush();
               }
             }
@@ -264,20 +305,27 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
         });
       }
 
+      diag.debug(`patchedHandler 22`);
       // Second case, lambda was asynchronous, in which case
       if (typeof handlerReturn?.then === 'function') {
+        diag.debug(`patchedHandler 23`);
         return handlerReturn.then(
           async success => {
+            diag.debug(`patchedHandler 24.0`);
             await plugin._flush();
+            diag.debug(`patchedHandler 24.1`);
             return success;
           },
           async error => {
+            diag.debug(`patchedHandler 25.0`);
             await plugin._flush();
+            diag.debug(`patchedHandler 25.1`);
             throw error;
           }
         );
       }
 
+      diag.debug(`patchedHandler 26`);
       // Third case, the lambda is purely synchronous, without event loop, nor callback() being called
       // Pitfall, no flushing !
       // We can't know for sure if the event loop is empty or not, so we can't know if we should flush or not.
@@ -345,8 +393,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
     span: Span,
     wrapperSpan?: Span
   ): Callback {
+    diag.debug(`_wrapCallback 1`);
     const plugin = this;
     return (err, res) => {
+      diag.debug(`_wrapCallback 2`);
       diag.debug('executing wrapped lookup callback function');
       plugin._applyResponseHook(span, err, res);
 
@@ -356,6 +406,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
       }
 
       void this._flush().then(() => {
+        diag.debug(`_wrapCallback 3`);
         diag.debug('executing original lookup callback function');
         originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
       });
@@ -363,6 +414,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
   }
 
   private async _flush() {
+    diag.debug('_flush 1');
     const flushers = [];
     if (this._traceForceFlusher) {
       flushers.push(this._traceForceFlusher());
@@ -381,6 +433,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase {
 
     try {
       await Promise.all(flushers);
+      diag.debug('_flush 2');
     } catch (e) {
       // We must not fail this call, but we may log it
       diag.error('Error while flushing the lambda', e);
