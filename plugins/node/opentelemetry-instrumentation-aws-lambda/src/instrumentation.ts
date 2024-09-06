@@ -84,9 +84,6 @@ type InstrumentationContext = {
 }
 
 export class AwsLambdaInstrumentation extends InstrumentationBase {
-  public isProbablyCallbackBased: boolean = false;
-  // private triggerOrigin: TriggerOrigin | undefined;
-  
   private _traceForceFlusher?: () => Promise<void>;
   private _metricForceFlusher?: () => Promise<void>;
 
