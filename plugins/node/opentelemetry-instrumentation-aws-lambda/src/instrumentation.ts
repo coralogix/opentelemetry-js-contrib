@@ -56,6 +56,7 @@ import {
   TriggerOrigin,
 } from './triggers';
 import { ReadableSpan } from '@opentelemetry/sdk-trace-base';
+import { Session, Profiler } from 'node:inspector' // can't use promises because that was added in node v19
 
 diag.debug("Loading AwsLambdaInstrumentation")
 
@@ -76,6 +77,14 @@ const TRACE_ID_ATTRIBUTE = 'cx.internal.trace.id';
 const SPAN_ID_ATTRIBUTE = 'cx.internal.span.id';
 const SPAN_ROLE_ATTRIBUTE = 'cx.internal.span.role';
 
+const parseIntEnvvar = (envName: string): number | undefined => {
+  const envVar = process.env?.[envName];
+  if (envVar === undefined) return undefined;
+  const numericEnvvar = parseInt(envVar);
+  if (isNaN(numericEnvvar)) return undefined;
+  return numericEnvvar;
+};
+
 type InstrumentationContext = { 
   triggerOrigin: TriggerOrigin | undefined; 
   triggerSpan: Span | undefined; 
@@ -88,7 +97,16 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   private _metricForceFlusher?: () => Promise<void>;
   private config: AwsLambdaInstrumentationConfig;
 
+  private profilingEnabled = process.env.OTEL_PROFILE?.toLowerCase() === 'true';
+  private profileStart1: number | null = null;
+  private profileStart2: number | null = null;
+  private profilingThreshold = parseIntEnvvar('OTEL_PROFILING_THRESHOLD') ?? 1000;
+  private session = new Session(); 
+
   constructor(config: AwsLambdaInstrumentationConfig = {}) {
+    super(PACKAGE_NAME, PACKAGE_VERSION, config);
+
+    // FIXME this is too late
     if (config.disableAwsContextPropagation == null) {
       if (
         typeof env['OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION'] ===
@@ -101,8 +119,14 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       }
     }
 
-    super(PACKAGE_NAME, PACKAGE_VERSION, config);
     this.config = config;
+
+    this.session.connect();
+    this.inspector_profiler_enable().then(() => {
+      console.log('Inspector profiler enabled');
+    }, (err) => {
+      console.error('Failed to enable inspector profiler', err);
+    });
   }
 
   init() {
@@ -393,10 +417,12 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
   // never fails
   private async _flush(): Promise<void> {
+      await this.startProfiling();
       await Promise.all([
         this._flush_trace(),
         this._flush_metric()
       ]);
+      await this.endProfiling();
   }
 
   // never fails
@@ -550,5 +576,86 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       return ROOT_CONTEXT;
     }
     return parent;
+  }
+
+
+  private async startProfiling() {
+    if (!this.profilingEnabled) {
+      return
+    }
+    try {
+      this.profileStart1 = Date.now();
+      await this.inspector_profiler_start();
+      this.profileStart2 = Date.now();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  
+  private async endProfiling() {
+    if (!this.profilingEnabled) {
+      return
+    }
+    try {
+      const profileEnd2 = Date.now();
+      const profileDuration2 = profileEnd2 - this.profileStart2!;
+      let params = await this.inspector_profiler_stop();
+      const profileEnd1 = Date.now();
+      const profileDuration1 = profileEnd1 - this.profileStart1!;
+
+      console.log(`Telemetry flush took ${profileDuration2}ms/${profileDuration1}ms`)
+      if (profileDuration2 >= this.profilingThreshold) {
+
+        let json = JSON.stringify(params.profile)
+        let batchSize = 20000;
+
+        const batches = Math.ceil(json.length / batchSize);
+        for (let i = 0; i < batches; i++) {
+            const start = i * batchSize;
+            const end = start + batchSize;
+            const batch = json.slice(start, end);
+            const encodedBatch = Buffer.from(batch).toString('base64');
+            console.log(`Invocation profile part ${i + 1}:`, encodedBatch);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  private async inspector_profiler_enable() {
+    return new Promise((resolve, reject) => {
+      this.session.post('Profiler.enable', (err: Error | null, params?: {}) =>{
+        if (err) {
+          reject(err);
+        } else {
+          resolve(params);
+        }
+      })
+    })
+  }
+
+  private async inspector_profiler_start() {
+    return new Promise((resolve, reject) => {
+      this.session.post('Profiler.start', (err: Error | null, params?: {}) =>{
+        if (err) {
+          reject(err);
+        } else {
+          resolve(params);
+        }
+      })
+    })
+  }
+
+  private async inspector_profiler_stop(): Promise<Profiler.StopReturnType> {
+    return new Promise((resolve, reject) => {
+      this.session.post('Profiler.stop', (err, params) =>{
+        if (err) {
+          reject(err);
+        } else {
+          resolve(params);
+        }
+      })
+    })
   }
 }
