@@ -98,8 +98,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   private config: AwsLambdaInstrumentationConfig;
 
   private profilingEnabled = process.env.OTEL_PROFILE?.toLowerCase() === 'true';
+  private shouldProfile = false;
   private profileStart1: number | null = null;
-  private profileStart2: number | null = null;
+  private flushStart: number | null = null;
+  private flushEnd: number | null = null;
   private profilingThreshold = parseIntEnvvar('OTEL_PROFILING_THRESHOLD') ?? 1000;
   private session = new Session(); 
 
@@ -212,6 +214,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     event: any,
     context: Context,
   ): Promise<InstrumentationContext> {
+
+    if (this.profilingEnabled && this.shouldProfile) {
+      await this.startProfiling();
+    }
 
     const upstreamContext = this._determineUpstreamContext(event, context);
 
@@ -417,11 +423,12 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
   // never fails
   private async _flush(): Promise<void> {
-      await this.startProfiling();
+      this.flushStart = Date.now();
       await Promise.all([
         this._flush_trace(),
         this._flush_metric()
       ]);
+      this.flushEnd = Date.now();
       await this.endProfiling();
   }
 
@@ -580,32 +587,26 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
 
   private async startProfiling() {
-    if (!this.profilingEnabled) {
-      return
-    }
     try {
-      this.profileStart1 = Date.now();
-      await this.inspector_profiler_start();
-      this.profileStart2 = Date.now();
+      if (this.profilingEnabled && this.shouldProfile) {
+        this.profileStart1 = Date.now();
+        await this.inspector_profiler_start();
+      }
     } catch (err) {
       console.error(err);
     }
   }
   
   private async endProfiling() {
-    if (!this.profilingEnabled) {
-      return
-    }
     try {
-      const profileEnd2 = Date.now();
-      const profileDuration2 = profileEnd2 - this.profileStart2!;
-      let params = await this.inspector_profiler_stop();
-      const profileEnd1 = Date.now();
-      const profileDuration1 = profileEnd1 - this.profileStart1!;
+      const flushDuration = this.flushEnd! - this.flushStart!;
+      if (this.profilingEnabled && this.shouldProfile) {
+        let params = await this.inspector_profiler_stop()
+        const profileEnd1 = Date.now();
+        const profileDuration1 = profileEnd1 - this.profileStart1!;
 
-      console.log(`Telemetry flush took ${profileDuration2}ms/${profileDuration1}ms`)
-      if (profileDuration2 >= this.profilingThreshold) {
-
+        console.log(`Telemetry flush took ${flushDuration}ms/${profileDuration1}ms`)
+  
         let json = JSON.stringify(params.profile)
         let batchSize = 20000;
 
@@ -618,6 +619,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
             console.log(`Invocation profile part ${i + 1}:`, encodedBatch);
         }
       }
+      this.shouldProfile = flushDuration >= this.profilingThreshold;
     } catch (err) {
       console.error(err);
     }
