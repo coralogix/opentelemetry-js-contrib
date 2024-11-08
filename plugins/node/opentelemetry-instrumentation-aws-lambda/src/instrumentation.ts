@@ -215,9 +215,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     context: Context,
   ): Promise<InstrumentationContext> {
 
-    if (this.profilingEnabled && this.shouldProfile) {
-      await this.startProfiling();
-    }
+    await this.startProfiling();
 
     const upstreamContext = this._determineUpstreamContext(event, context);
 
@@ -620,6 +618,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         }
       }
       this.shouldProfile = flushDuration >= this.profilingThreshold;
+      console.log(`Telemetry flush took ${flushDuration}ms shouldProfile=${this.shouldProfile}`)
     } catch (err) {
       console.error(err);
     }
