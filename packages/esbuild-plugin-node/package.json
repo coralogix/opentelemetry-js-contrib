@@ -1,6 +1,6 @@
 {
   "name": "@coralogix/esbuild-plugin-node",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Metapackage which bundles opentelemetry node core and contrib instrumentations via an esbuild plugin",
   "author": "OpenTelemetry Authors",
   "homepage": "https://github.com/coralogix/opentelemetry-js-contrib/tree/coralogix-autoinstrumentation/packages/esbuild-plugin-node#readme",
