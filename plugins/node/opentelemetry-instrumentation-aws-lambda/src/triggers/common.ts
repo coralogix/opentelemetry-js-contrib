@@ -36,29 +36,29 @@ export interface LambdaTrigger<T> {
 }
 
 export const validateRecord =
-  (recordSource: string, additionalRecordFields?: string[]) =>
-  (record: any) => {
-    return (
-      record &&
-      typeof record === 'object' &&
-      'eventSource' in record &&
-      record.eventSource === recordSource &&
-      (additionalRecordFields
-        ? additionalRecordFields.every(
+  (recordSource: string, eventSourceField: string, additionalRecordFields?: string[]) =>
+    (record: any) => {
+      return (
+        record &&
+        typeof record === 'object' &&
+        eventSourceField in record &&
+        record[eventSourceField] === recordSource &&
+        (additionalRecordFields
+          ? additionalRecordFields.every(
             field => field in record && typeof record[field] === 'object'
           )
-        : true)
-    );
-  };
+          : true)
+      );
+    };
 
 export const validateRecordsEvent =
-  <T>(recordSource: string, additionalRecordFields?: string[]) =>
-  (event: any): event is T => {
-    return (
-      event &&
-      typeof event === 'object' &&
-      'Records' in event &&
-      Array.isArray(event.Records) &&
-      event.Records.every(validateRecord(recordSource, additionalRecordFields))
-    );
-  };
+  <T>(recordSource: string, additionalRecordFields?: string[], eventSourceField: string = "eventSource") =>
+    (event: any): event is T => {
+      return (
+        event &&
+        typeof event === 'object' &&
+        'Records' in event &&
+        Array.isArray(event.Records) &&
+        event.Records.every(validateRecord(recordSource, eventSourceField, additionalRecordFields))
+      );
+    };

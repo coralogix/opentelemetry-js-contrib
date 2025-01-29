@@ -51,7 +51,7 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
 import { env } from 'process';
 import {
   finalizeSpan,
-  getEventTrigger,
+  initializeEventTriggerSpan,
   LambdaAttributes,
   TriggerOrigin,
 } from './triggers';
@@ -294,7 +294,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     if (this.config.detectTrigger === false) {
       return undefined;
     }
-    const trigger = getEventTrigger(event);
+    const trigger = initializeEventTriggerSpan(event);
     if (!trigger) {
       return undefined;
     }
