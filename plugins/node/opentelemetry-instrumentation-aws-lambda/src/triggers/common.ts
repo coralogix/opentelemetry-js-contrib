@@ -15,8 +15,8 @@
  */
 
 import { Span, SpanOptions } from '@opentelemetry/api';
-import { TriggerOrigin } from './index';
 import { AwsLambdaInstrumentationConfig } from '../types';
+import { TriggerOrigin } from './index';
 
 export type TriggerValidator<T> = (event: any) => event is T;
 export interface TriggerSpanInitializerResult {

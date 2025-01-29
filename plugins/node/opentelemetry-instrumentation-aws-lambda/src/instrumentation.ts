@@ -37,7 +37,7 @@ import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import {SEMATTRS_FAAS_EXECUTION} from '@opentelemetry/semantic-conventions';
+import { SEMATTRS_FAAS_EXECUTION } from '@opentelemetry/semantic-conventions';
 
 import {
   APIGatewayProxyEventHeaders,
@@ -76,11 +76,11 @@ const TRACE_ID_ATTRIBUTE = 'cx.internal.trace.id';
 const SPAN_ID_ATTRIBUTE = 'cx.internal.span.id';
 const SPAN_ROLE_ATTRIBUTE = 'cx.internal.span.role';
 
-type InstrumentationContext = { 
-  triggerOrigin: TriggerOrigin | undefined; 
-  triggerSpan: Span | undefined; 
-  invocationSpan: Span; 
-  invocationParentContext: OtelContext; 
+type InstrumentationContext = {
+  triggerOrigin: TriggerOrigin | undefined;
+  triggerSpan: Span | undefined;
+  invocationSpan: Span;
+  invocationParentContext: OtelContext;
 }
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
@@ -92,7 +92,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     if (config.disableAwsContextPropagation == null) {
       if (
         typeof env['OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION'] ===
-          'string' &&
+        'string' &&
         env[
           'OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION'
         ].toLocaleLowerCase() === 'true'
@@ -132,7 +132,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
               // the handler happened to both call the callback and complete a returned Promise, whichever happens first will
               // win and the latter will be ignored.
               const wrappedCallback = self._wrapCallback(callback, instrCtx);
-    
+
               let maybePromise: any;
               try {
                 maybePromise = original.apply(this, [event, context, wrappedCallback])
@@ -204,13 +204,13 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
     await this._sendEarlySpans(upstreamContext, triggerSpan, invocationParentContext, invocationSpan);
 
-    return {triggerOrigin, triggerSpan, invocationSpan, invocationParentContext}
+    return { triggerOrigin, triggerSpan, invocationSpan, invocationParentContext }
   }
 
   // never fails
   private async _after_execution(
     context: InstrumentationContext | undefined,
-    err:  string | Error | null | undefined, 
+    err: string | Error | null | undefined,
     res: any,
   ): Promise<void> {
     try {
@@ -258,7 +258,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     span: ReadableSpan,
   ): Span {
     const earlySpan = this.tracer.startSpan(
-      span.name, 
+      span.name,
       {
         startTime: span.startTime,
         kind: span.kind,
@@ -385,18 +385,18 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return (err, res) => {
       diag.debug('executing wrapped callback function');
       this._after_execution(instrumentationContext, err, res).then(() => {
-          diag.debug('executing original callback function');
-          originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
+        diag.debug('executing original callback function');
+        originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
       });
     };
   }
 
   // never fails
   private async _flush(): Promise<void> {
-      await Promise.all([
-        this._flush_trace(),
-        this._flush_metric()
-      ]);
+    await Promise.all([
+      this._flush_trace(),
+      this._flush_metric()
+    ]);
   }
 
   // never fails
@@ -414,7 +414,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     }
   }
 
-    // never fails
+  // never fails
   private async _flush_metric(): Promise<void> {
     if (this._metricForceFlusher) {
       try {
@@ -530,7 +530,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         }
       }
     }
-    const eventContextExtractor = this.config.eventContextExtractor || AwsLambdaInstrumentation._defaultEventContextExtractor
+
+    const eventContextExtractor =
+      this.config.eventContextExtractor ||
+      AwsLambdaInstrumentation._defaultEventContextExtractor
+
     const extractedContext = safeExecuteInTheMiddle(
       () => eventContextExtractor(event, context),
       e => {
