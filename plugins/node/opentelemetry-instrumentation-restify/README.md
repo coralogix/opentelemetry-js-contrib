@@ -17,7 +17,7 @@ npm install --save @opentelemetry/instrumentation-restify
 
 ### Supported Versions
 
-- [`restify`](https://www.npmjs.com/package/restify) versions `>=4.0.0 <12`
+- [`restify`](https://www.npmjs.com/package/restify) versions `>=4.1.0 <12`
 
 ## Usage
 
@@ -27,9 +27,12 @@ const { ConsoleSpanExporter, SimpleSpanProcessor } = require('@opentelemetry/sdk
 const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
 
-const provider = new NodeTracerProvider();
+const provider = new NodeTracerProvider({
+  spanProcessors: [
+    new SimpleSpanProcessor(new ConsoleSpanExporter()),
+  ]
+});
 
-provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 provider.register();
 
 registerInstrumentations({

@@ -77,8 +77,8 @@ For example, to enable only the `env`, `host` detectors:
 export OTEL_NODE_RESOURCE_DETECTORS="env,host"
 ```
 
-By default, all [Supported Instrumentations](#supported-instrumentations) are enabled.
-You can use the environment variable `OTEL_NODE_ENABLED_INSTRUMENTATIONS` to enable only certain instrumentations,
+By default, all [Supported Instrumentations](#supported-instrumentations) are enabled, unless they are annotated with "default disabled".
+You can use the environment variable `OTEL_NODE_ENABLED_INSTRUMENTATIONS` to enable only certain instrumentations, including "default disabled" ones
 OR the environment variable `OTEL_NODE_DISABLED_INSTRUMENTATIONS` to disable only certain instrumentations,
 by providing a comma-separated list of the instrumentation package names without the `@opentelemetry/instrumentation-` prefix.
 
@@ -91,10 +91,10 @@ instrumentations:
 export OTEL_NODE_ENABLED_INSTRUMENTATIONS="http,nestjs-core"
 ```
 
-To disable only [@opentelemetry/instrumentation-fs](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/instrumentation-fs):
+To disable only [@opentelemetry/instrumentation-net](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/instrumentation-net):
 
 ```shell
-export OTEL_NODE_DISABLED_INSTRUMENTATIONS="fs"
+export OTEL_NODE_DISABLED_INSTRUMENTATIONS="net"
 ```
 
 If both environment variables are set, `OTEL_NODE_ENABLED_INSTRUMENTATIONS` is applied first, and then `OTEL_NODE_DISABLED_INSTRUMENTATIONS` is applied to that list.
@@ -138,8 +138,10 @@ const provider = new NodeTracerProvider({
   resource: new Resource({
     [SEMRESATTRS_SERVICE_NAME]: 'basic-service',
   }),
+  spanProcessors: [
+    new SimpleSpanProcessor(exporter),
+  ],
 });
-provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
 provider.register();
 
 registerInstrumentations({
@@ -169,7 +171,11 @@ registerInstrumentations({
 - [@opentelemetry/instrumentation-dataloader](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/instrumentation-dataloader)
 - [@opentelemetry/instrumentation-dns](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-dns)
 - [@opentelemetry/instrumentation-express](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-express)
-- [@opentelemetry/instrumentation-fastify](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-fastify)
+- [@opentelemetry/instrumentation-fastify](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-fastify) (deprecated, default disabled)
+  - This component is **deprecated** in favor of the official instrumentation package [`@fastify/otel`](https://www.npmjs.com/package/@fastify/otel), maintained by the Fastify authors.
+    - Please see [here](https://github.com/fastify/otel?tab=readme-ov-file#usage) for instructions on how to use `@fastify/otel`.
+  - This component will be removed on June 30, 2025
+- [@opentelemetry/instrumentation-fs](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/instrumentation-fs) (default disabled)
 - [@opentelemetry/instrumentation-generic-pool](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-generic-pool)
 - [@opentelemetry/instrumentation-graphql](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node/opentelemetry-instrumentation-graphql)
 - [@opentelemetry/instrumentation-grpc](https://github.com/open-telemetry/opentelemetry-js/tree/main/experimental/packages/opentelemetry-instrumentation-grpc)

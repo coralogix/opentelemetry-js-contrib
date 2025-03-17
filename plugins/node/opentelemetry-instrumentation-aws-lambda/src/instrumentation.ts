@@ -31,13 +31,31 @@ import {
   TextMapGetter,
   trace,
   TraceFlags,
+  TraceFlags,
   TracerProvider,
+  ROOT_CONTEXT,
+  ROOT_CONTEXT,
+  Attributes,
 } from '@opentelemetry/api';
 import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import {SEMATTRS_FAAS_EXECUTION} from '@opentelemetry/semantic-conventions';
+import { SEMATTRS_FAAS_EXECUTION } from '@opentelemetry/semantic-conventions';
+AWSXRAY_TRACE_ID_HEADER,
+  AWSXRayPropagator,
+} from '@opentelemetry/propagator-aws-xray';
+import {
+  SEMATTRS_FAAS_EXECUTION,
+  SEMRESATTRS_CLOUD_ACCOUNT_ID,
+  SEMRESATTRS_FAAS_ID,
+} from '@opentelemetry/semantic-conventions';
+ATTR_URL_FULL,
+  SEMATTRS_FAAS_EXECUTION,
+  SEMRESATTRS_CLOUD_ACCOUNT_ID,
+  SEMRESATTRS_FAAS_ID,
+} from '@opentelemetry/semantic-conventions';
+import { ATTR_FAAS_COLDSTART } from './semconv';
 
 import {
   APIGatewayProxyEventHeaders,
@@ -47,6 +65,9 @@ import {
 } from 'aws-lambda';
 
 import { AwsLambdaInstrumentationConfig } from './types';
+import { AwsLambdaInstrumentationConfig, EventContextExtractor } from './types';
+import { AwsLambdaInstrumentationConfig, EventContextExtractor } from './types';
+/** @knipignore */
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
 import { env } from 'process';
 import {
@@ -58,8 +79,10 @@ import {
 import { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 
 diag.debug("Loading AwsLambdaInstrumentation")
+import { env } from 'process';
+import { LambdaModule } from './internal-types';
+import { LambdaModule } from './internal-types';
 
-const awsPropagator = new AWSXRayPropagator();
 const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
   keys(carrier): string[] {
     return Object.keys(carrier);
@@ -76,12 +99,13 @@ const TRACE_ID_ATTRIBUTE = 'cx.internal.trace.id';
 const SPAN_ID_ATTRIBUTE = 'cx.internal.span.id';
 const SPAN_ROLE_ATTRIBUTE = 'cx.internal.span.role';
 
-type InstrumentationContext = { 
-  triggerOrigin: TriggerOrigin | undefined; 
-  triggerSpan: Span | undefined; 
-  invocationSpan: Span; 
-  invocationParentContext: OtelContext; 
+type InstrumentationContext = {
+  triggerOrigin: TriggerOrigin | undefined;
+  triggerSpan: Span | undefined;
+  invocationSpan: Span;
+  invocationParentContext: OtelContext;
 }
+export const lambdaMaxInitInMilliseconds = 10_000;
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
   private _traceForceFlusher?: () => Promise<void>;
@@ -89,29 +113,146 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   private config: AwsLambdaInstrumentationConfig;
 
   constructor(config: AwsLambdaInstrumentationConfig = {}) {
-    if (config.disableAwsContextPropagation == null) {
-      if (
-        typeof env['OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION'] ===
-          'string' &&
-        env[
-          'OTEL_LAMBDA_DISABLE_AWS_CONTEXT_PROPAGATION'
-        ].toLocaleLowerCase() === 'true'
-      ) {
-        config = { ...config, disableAwsContextPropagation: true };
-      }
-    }
-
     super(PACKAGE_NAME, PACKAGE_VERSION, config);
     this.config = config;
   }
 
   init() {
-    return [];
+    const taskRoot = process.env.LAMBDA_TASK_ROOT;
+    const handlerDef = this.getConfig().lambdaHandler ?? process.env._HANDLER;
+
+    // _HANDLER and LAMBDA_TASK_ROOT are always defined in Lambda but guard bail out if in the future this changes.
+    if (!taskRoot || !handlerDef) {
+      this._diag.debug(
+        'Skipping lambda instrumentation: no _HANDLER/lambdaHandler or LAMBDA_TASK_ROOT.',
+        { taskRoot, handlerDef }
+      );
+      return [];
+    }
+
+    const handler = path.basename(handlerDef);
+    const moduleRoot = handlerDef.substring(
+      0,
+      handlerDef.length - handler.length
+    );
+
+    const [module, functionName] = handler.split('.', 2);
+
+    // Lambda loads user function using an absolute path.
+    let filename = path.resolve(taskRoot, moduleRoot, module);
+    if (!filename.endsWith('.js')) {
+      // It's impossible to know in advance if the user has a js, mjs or cjs file.
+      // Check that the .js file exists otherwise fallback to the next known possibilities (.mjs, .cjs).
+      try {
+        fs.statSync(`${filename}.js`);
+        filename += '.js';
+      } catch (e) {
+        try {
+          fs.statSync(`${filename}.mjs`);
+          // fallback to .mjs (ESM)
+          filename += '.mjs';
+        } catch (e2) {
+          try {
+            fs.statSync(`${filename}.cjs`);
+            // fallback to .cjs (CommonJS)
+            filename += '.cjs';
+          } catch (e3) {
+            this._diag.warn(
+              'No handler file was able to resolved with one of the known extensions for the file',
+              filename
+            );
+          }
+        }
+      }
+    }
+
+    diag.debug('Instrumenting lambda handler', {
+      taskRoot,
+      handlerDef,
+      handler,
+      moduleRoot,
+      module,
+      filename,
+      functionName,
+    });
+
+    const lambdaStartTime =
+      this.getConfig().lambdaStartTime ||
+      Date.now() - Math.floor(1000 * process.uptime());
+
+    return [
+      new InstrumentationNodeModuleDefinition(
+        // NB: The patching infrastructure seems to match names backwards, this must be the filename, while
+        // InstrumentationNodeModuleFile must be the module name.
+        filename,
+        ['*'],
+        undefined,
+        undefined,
+        [
+          new InstrumentationNodeModuleFile(
+            module,
+            ['*'],
+            (moduleExports: LambdaModule) => {
+              if (isWrapped(moduleExports[functionName])) {
+                this._unwrap(moduleExports, functionName);
+              }
+              this._wrap(
+                moduleExports,
+                functionName,
+                this._getHandler(lambdaStartTime)
+              );
+              return moduleExports;
+            },
+            (moduleExports?: LambdaModule) => {
+              if (moduleExports == null) return;
+              this._unwrap(moduleExports, functionName);
+            }
+          ),
+        ]
+      ),
+    ];
   }
 
-  public getPatchHandler(original: Handler): Handler {
+  private _getHandler(handlerLoadStartTime: number) {
+    return (original: Handler) => {
+      return this._getPatchHandler(original, handlerLoadStartTime);
+    };
+  }
+
+  private _getPatchHandler(original: Handler, lambdaStartTime: number) {
     diag.debug('patching handler function');
-    const self = this;
+    const plugin = this;
+
+    let requestHandledBefore = false;
+    let requestIsColdStart = true;
+
+    function _onRequest(): void {
+      if (requestHandledBefore) {
+        // Non-first requests cannot be coldstart.
+        requestIsColdStart = false;
+      } else {
+        if (
+          process.env.AWS_LAMBDA_INITIALIZATION_TYPE ===
+          'provisioned-concurrency'
+        ) {
+          // If sandbox environment is initialized with provisioned concurrency,
+          // even the first requests should not be considered as coldstart.
+          requestIsColdStart = false;
+        } else {
+          // Check whether it is proactive initialization or not:
+          // https://aaronstuyvenberg.com/posts/understanding-proactive-initialization
+          const passedTimeSinceHandlerLoad: number =
+            Date.now() - lambdaStartTime;
+          const proactiveInitialization: boolean =
+            passedTimeSinceHandlerLoad > lambdaMaxInitInMilliseconds;
+
+          // If sandbox has been initialized proactively before the actual request,
+          // even the first requests should not be considered as coldstart.
+          requestIsColdStart = !proactiveInitialization;
+        }
+        requestHandledBefore = true;
+      }
+    }
 
     return function patchedHandler(
       this: never,
@@ -121,6 +262,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       context: Context,
       callback: Callback
     ): void {
+      _onRequest();
 
       self._before_execution(event, context).then(
         (instrCtx) => {
@@ -132,7 +274,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
               // the handler happened to both call the callback and complete a returned Promise, whichever happens first will
               // win and the latter will be ignored.
               const wrappedCallback = self._wrapCallback(callback, instrCtx);
-    
+
               let maybePromise: any;
               try {
                 maybePromise = original.apply(this, [event, context, wrappedCallback])
@@ -146,7 +288,6 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
                 });
                 return;
               }
-
               if (typeof maybePromise?.then === 'function') {
                 diag.debug('handler returned a promise');
                 // Promise based async handler
@@ -180,7 +321,6 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
           callback(err, undefined);
         }
       )
-
     }
   }
 
@@ -204,13 +344,13 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
     await this._sendEarlySpans(upstreamContext, triggerSpan, invocationParentContext, invocationSpan);
 
-    return {triggerOrigin, triggerSpan, invocationSpan, invocationParentContext}
+    return { triggerOrigin, triggerSpan, invocationSpan, invocationParentContext }
   }
 
   // never fails
   private async _after_execution(
     context: InstrumentationContext | undefined,
-    err:  string | Error | null | undefined, 
+    err: string | Error | null | undefined,
     res: any,
   ): Promise<void> {
     try {
@@ -258,7 +398,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     span: ReadableSpan,
   ): Span {
     const earlySpan = this.tracer.startSpan(
-      span.name, 
+      span.name,
       {
         startTime: span.startTime,
         kind: span.kind,
@@ -385,18 +525,18 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return (err, res) => {
       diag.debug('executing wrapped callback function');
       this._after_execution(instrumentationContext, err, res).then(() => {
-          diag.debug('executing original callback function');
-          originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
+        diag.debug('executing original callback function');
+        originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
       });
     };
   }
 
   // never fails
   private async _flush(): Promise<void> {
-      await Promise.all([
-        this._flush_trace(),
-        this._flush_metric()
-      ]);
+    await Promise.all([
+      this._flush_trace(),
+      this._flush_metric()
+    ]);
   }
 
   // never fails
@@ -414,7 +554,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     }
   }
 
-    // never fails
+  // never fails
   private async _flush_metric(): Promise<void> {
     if (this._metricForceFlusher) {
       try {
@@ -503,16 +643,64 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return propagation.extract(ROOT_CONTEXT, httpHeaders, headerGetter);
   }
 
-  private _determineUpstreamContext(
+  private static _extractOtherEventFields(event: any): Attributes {
+    const answer: Attributes = {};
+    const fullUrl = this._extractFullUrl(event);
+    if (fullUrl) {
+      answer[ATTR_URL_FULL] = fullUrl;
+    }
+    return answer;
+  }
+
+  private static _extractFullUrl(event: any): string | undefined {
+    // API gateway encodes a lot of url information in various places to recompute this
+    if (!event.headers) {
+      return undefined;
+    }
+    // Helper function to deal with case variations (instead of making a tolower() copy of the headers)
+    function findAny(
+      event: any,
+      key1: string,
+      key2: string
+    ): string | undefined {
+      return event.headers[key1] ?? event.headers[key2];
+    }
+    const host = findAny(event, 'host', 'Host');
+    const proto = findAny(event, 'x-forwarded-proto', 'X-Forwarded-Proto');
+    const port = findAny(event, 'x-forwarded-port', 'X-Forwarded-Port');
+    if (!(proto && host && (event.path || event.rawPath))) {
+      return undefined;
+    }
+    let answer = proto + '://' + host;
+    if (port) {
+      answer += ':' + port;
+    }
+    answer += event.path ?? event.rawPath;
+    if (event.queryStringParameters) {
+      let first = true;
+      for (const key in event.queryStringParameters) {
+        answer += first ? '?' : '&';
+        answer += encodeURIComponent(key);
+        answer += '=';
+        answer += encodeURIComponent(event.queryStringParameters[key]);
+        first = false;
+      }
+    }
+    return answer;
+  }
+
+  private static _determineParent(
     event: any,
     context: Context,
+    disableAwsContextPropagation: boolean,
+    eventContextExtractor: EventContextExtractor
   ): OtelContext {
     let parent: OtelContext | undefined = undefined;
-    if (!this.config.disableAwsContextPropagation) {
+    if (!disableAwsContextPropagation) {
       const lambdaTraceHeader = process.env[traceContextEnvironmentKey];
       if (lambdaTraceHeader) {
         parent = awsPropagator.extract(
-          ROOT_CONTEXT,
+          otelContext.active(),
           { [AWSXRAY_TRACE_ID_HEADER]: lambdaTraceHeader },
           headerGetter
         );
@@ -530,7 +718,6 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         }
       }
     }
-    const eventContextExtractor = this.config.eventContextExtractor || AwsLambdaInstrumentation._defaultEventContextExtractor
     const extractedContext = safeExecuteInTheMiddle(
       () => eventContextExtractor(event, context),
       e => {
@@ -545,10 +732,6 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     if (extractedContext && trace.getSpan(extractedContext)?.spanContext()) {
       return extractedContext;
     }
-    if (!parent) {
-      // No context in Lambda environment or HTTP headers.
-      return ROOT_CONTEXT;
-    }
-    return parent;
+    return ROOT_CONTEXT;
   }
 }
