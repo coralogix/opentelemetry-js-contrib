@@ -31,26 +31,15 @@ import {
   TextMapGetter,
   trace,
   TraceFlags,
-  TraceFlags,
   TracerProvider,
-  ROOT_CONTEXT,
-  ROOT_CONTEXT,
   Attributes,
 } from '@opentelemetry/api';
 import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import { SEMATTRS_FAAS_EXECUTION } from '@opentelemetry/semantic-conventions';
-AWSXRAY_TRACE_ID_HEADER,
-  AWSXRayPropagator,
-} from '@opentelemetry/propagator-aws-xray';
 import {
-  SEMATTRS_FAAS_EXECUTION,
-  SEMRESATTRS_CLOUD_ACCOUNT_ID,
-  SEMRESATTRS_FAAS_ID,
-} from '@opentelemetry/semantic-conventions';
-ATTR_URL_FULL,
+  ATTR_URL_FULL,
   SEMATTRS_FAAS_EXECUTION,
   SEMRESATTRS_CLOUD_ACCOUNT_ID,
   SEMRESATTRS_FAAS_ID,
@@ -65,11 +54,8 @@ import {
 } from 'aws-lambda';
 
 import { AwsLambdaInstrumentationConfig } from './types';
-import { AwsLambdaInstrumentationConfig, EventContextExtractor } from './types';
-import { AwsLambdaInstrumentationConfig, EventContextExtractor } from './types';
 /** @knipignore */
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
-import { env } from 'process';
 import {
   finalizeSpan,
   getEventTrigger,
@@ -78,11 +64,9 @@ import {
 } from './triggers';
 import { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 
-diag.debug("Loading AwsLambdaInstrumentation")
-import { env } from 'process';
-import { LambdaModule } from './internal-types';
-import { LambdaModule } from './internal-types';
+diag.debug('Loading AwsLambdaInstrumentation');
 
+const awsPropagator = new AWSXRayPropagator();
 const headerGetter: TextMapGetter<APIGatewayProxyEventHeaders> = {
   keys(carrier): string[] {
     return Object.keys(carrier);
@@ -104,7 +88,10 @@ type InstrumentationContext = {
   triggerSpan: Span | undefined;
   invocationSpan: Span;
   invocationParentContext: OtelContext;
-}
+};
+
+// Lambda's init phase is limited to 10 seconds. Otherwise the sandbox is
+// re-nitialized from scratch.
 export const lambdaMaxInitInMilliseconds = 10_000;
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
@@ -118,113 +105,19 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   }
 
   init() {
-    const taskRoot = process.env.LAMBDA_TASK_ROOT;
-    const handlerDef = this.getConfig().lambdaHandler ?? process.env._HANDLER;
+    return [];
+  }
 
-    // _HANDLER and LAMBDA_TASK_ROOT are always defined in Lambda but guard bail out if in the future this changes.
-    if (!taskRoot || !handlerDef) {
-      this._diag.debug(
-        'Skipping lambda instrumentation: no _HANDLER/lambdaHandler or LAMBDA_TASK_ROOT.',
-        { taskRoot, handlerDef }
-      );
-      return [];
-    }
+  public getPatchHandler(original: Handler) {
+    diag.debug('patching handler function');
+    const self = this;
 
-    const handler = path.basename(handlerDef);
-    const moduleRoot = handlerDef.substring(
-      0,
-      handlerDef.length - handler.length
-    );
-
-    const [module, functionName] = handler.split('.', 2);
-
-    // Lambda loads user function using an absolute path.
-    let filename = path.resolve(taskRoot, moduleRoot, module);
-    if (!filename.endsWith('.js')) {
-      // It's impossible to know in advance if the user has a js, mjs or cjs file.
-      // Check that the .js file exists otherwise fallback to the next known possibilities (.mjs, .cjs).
-      try {
-        fs.statSync(`${filename}.js`);
-        filename += '.js';
-      } catch (e) {
-        try {
-          fs.statSync(`${filename}.mjs`);
-          // fallback to .mjs (ESM)
-          filename += '.mjs';
-        } catch (e2) {
-          try {
-            fs.statSync(`${filename}.cjs`);
-            // fallback to .cjs (CommonJS)
-            filename += '.cjs';
-          } catch (e3) {
-            this._diag.warn(
-              'No handler file was able to resolved with one of the known extensions for the file',
-              filename
-            );
-          }
-        }
-      }
-    }
-
-    diag.debug('Instrumenting lambda handler', {
-      taskRoot,
-      handlerDef,
-      handler,
-      moduleRoot,
-      module,
-      filename,
-      functionName,
-    });
+    let requestHandledBefore = false;
+    let requestIsColdStart = true;
 
     const lambdaStartTime =
       this.getConfig().lambdaStartTime ||
       Date.now() - Math.floor(1000 * process.uptime());
-
-    return [
-      new InstrumentationNodeModuleDefinition(
-        // NB: The patching infrastructure seems to match names backwards, this must be the filename, while
-        // InstrumentationNodeModuleFile must be the module name.
-        filename,
-        ['*'],
-        undefined,
-        undefined,
-        [
-          new InstrumentationNodeModuleFile(
-            module,
-            ['*'],
-            (moduleExports: LambdaModule) => {
-              if (isWrapped(moduleExports[functionName])) {
-                this._unwrap(moduleExports, functionName);
-              }
-              this._wrap(
-                moduleExports,
-                functionName,
-                this._getHandler(lambdaStartTime)
-              );
-              return moduleExports;
-            },
-            (moduleExports?: LambdaModule) => {
-              if (moduleExports == null) return;
-              this._unwrap(moduleExports, functionName);
-            }
-          ),
-        ]
-      ),
-    ];
-  }
-
-  private _getHandler(handlerLoadStartTime: number) {
-    return (original: Handler) => {
-      return this._getPatchHandler(original, handlerLoadStartTime);
-    };
-  }
-
-  private _getPatchHandler(original: Handler, lambdaStartTime: number) {
-    diag.debug('patching handler function');
-    const plugin = this;
-
-    let requestHandledBefore = false;
-    let requestIsColdStart = true;
 
     function _onRequest(): void {
       if (requestHandledBefore) {
@@ -264,10 +157,13 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     ): void {
       _onRequest();
 
-      self._before_execution(event, context).then(
-        (instrCtx) => {
+      self._before_execution(event, context, requestIsColdStart).then(
+        instrCtx => {
           otelContext.with(
-            trace.setSpan(instrCtx.invocationParentContext, instrCtx.invocationSpan),
+            trace.setSpan(
+              instrCtx.invocationParentContext,
+              instrCtx.invocationSpan
+            ),
             () => {
               // Lambda seems to pass a callback even if handler is of Promise form, so we wrap all the time before calling
               // the handler and see if the result is a Promise or not. In such a case, the callback is usually ignored. If
@@ -277,7 +173,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
               let maybePromise: any;
               try {
-                maybePromise = original.apply(this, [event, context, wrappedCallback])
+                maybePromise = original.apply(this, [
+                  event,
+                  context,
+                  wrappedCallback,
+                ]);
               } catch (err: any) {
                 // Catching synchronous failures
                 diag.debug('handler threw synchronously');
@@ -313,45 +213,61 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
             }
           );
         },
-        async (err) => {
+        async err => {
           diag.error('_before_execution failed', err);
           await self._after_execution(undefined, err, undefined);
           context.callbackWaitsForEmptyEventLoop = false;
           diag.debug('calling AWS callback');
           callback(err, undefined);
         }
-      )
-    }
+      );
+    };
   }
 
   private async _before_execution(
     event: any,
     context: Context,
+    requestIsColdStart: boolean
   ): Promise<InstrumentationContext> {
-
     const upstreamContext = this._determineUpstreamContext(event, context);
 
-    const { triggerSpan, triggerOrigin } = this._startTriggerSpan(event, upstreamContext) ?? {};
+    const { triggerSpan, triggerOrigin } =
+      this._startTriggerSpan(event, upstreamContext) ?? {};
 
     let invocationParentContext;
     if (triggerSpan) {
       invocationParentContext = trace.setSpan(upstreamContext, triggerSpan);
     } else {
-      invocationParentContext = upstreamContext
+      invocationParentContext = upstreamContext;
     }
 
-    const invocationSpan = this._startInvocationSpan(event, context, invocationParentContext);
+    const invocationSpan = this._startInvocationSpan(
+      event,
+      context,
+      invocationParentContext,
+      requestIsColdStart
+    );
 
-    await this._sendEarlySpans(upstreamContext, triggerSpan, invocationParentContext, invocationSpan);
+    await this._sendEarlySpans(
+      upstreamContext,
+      triggerSpan,
+      invocationParentContext,
+      invocationSpan
+    );
 
-    return { triggerOrigin, triggerSpan, invocationSpan, invocationParentContext }
+    return {
+      triggerOrigin,
+      triggerSpan,
+      invocationSpan,
+      invocationParentContext,
+    };
   }
 
   // never fails
   private async _after_execution(
     context: InstrumentationContext | undefined,
     err: string | Error | null | undefined,
-    res: any,
+    res: any
   ): Promise<void> {
     try {
       const plugin = this;
@@ -360,13 +276,18 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         plugin._endInvocationSpan(context.invocationSpan, err);
       }
       if (context?.triggerSpan) {
-        plugin._endTriggerSpan(context.triggerSpan, context.triggerOrigin, res, err);
+        plugin._endTriggerSpan(
+          context.triggerSpan,
+          context.triggerOrigin,
+          res,
+          err
+        );
       }
     } catch (e) {
       diag.error('Error in _after_execution', e);
     }
 
-    await this._flush()
+    await this._flush();
     diag.debug('_after_execution completed');
   }
 
@@ -375,16 +296,28 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     triggerParentContext: OtelContext,
     triggerSpan: Span | undefined,
     invocationParentContext: OtelContext,
-    invocationSpan: Span,
+    invocationSpan: Span
   ) {
     try {
-      if (triggerSpan && ((triggerSpan as unknown as ReadableSpan).kind !== undefined)) {
-        const earlyTrigger = this._createEarlySpan(triggerParentContext, triggerSpan as unknown as ReadableSpan);
+      if (
+        triggerSpan &&
+        (triggerSpan as unknown as ReadableSpan).kind !== undefined
+      ) {
+        const earlyTrigger = this._createEarlySpan(
+          triggerParentContext,
+          triggerSpan as unknown as ReadableSpan
+        );
         earlyTrigger.end();
       }
 
-      if (invocationSpan && ((invocationSpan as unknown as ReadableSpan).kind !== undefined)) {
-        const earlyTrigger = this._createEarlySpan(invocationParentContext, invocationSpan as unknown as ReadableSpan);
+      if (
+        invocationSpan &&
+        (invocationSpan as unknown as ReadableSpan).kind !== undefined
+      ) {
+        const earlyTrigger = this._createEarlySpan(
+          invocationParentContext,
+          invocationSpan as unknown as ReadableSpan
+        );
         earlyTrigger.end();
       }
     } catch (e) {
@@ -395,7 +328,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
   private _createEarlySpan(
     parentContext: OtelContext,
-    span: ReadableSpan,
+    span: ReadableSpan
   ): Span {
     const earlySpan = this.tracer.startSpan(
       span.name,
@@ -452,7 +385,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     span: Span,
     triggerOrigin: TriggerOrigin | undefined,
     lambdaResponse: any,
-    errorFromLambda: string | Error | null | undefined,
+    errorFromLambda: string | Error | null | undefined
   ): void {
     if (span.isRecording()) {
       if (errorFromLambda) {
@@ -476,7 +409,12 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     }
   }
 
-  private _startInvocationSpan(event: any, context: Context, invocationParentContext: OtelContext): Span {
+  private _startInvocationSpan(
+    event: any,
+    context: Context,
+    invocationParentContext: OtelContext,
+    requestIsColdStart: boolean
+  ): Span {
     const invocationSpan = this.tracer.startSpan(
       context.functionName,
       {
@@ -484,6 +422,13 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         attributes: {
           [SEMATTRS_FAAS_EXECUTION]: context.awsRequestId,
           [SPAN_ROLE_ATTRIBUTE]: 'invocation',
+          [SEMRESATTRS_FAAS_ID]: context.invokedFunctionArn,
+          [SEMRESATTRS_CLOUD_ACCOUNT_ID]:
+            AwsLambdaInstrumentation._extractAccountId(
+              context.invokedFunctionArn
+            ),
+          [ATTR_FAAS_COLDSTART]: requestIsColdStart,
+          ...AwsLambdaInstrumentation._extractOtherEventFields(event),
         },
       },
       invocationParentContext
@@ -491,15 +436,18 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
     if (this.config.requestHook) {
       try {
-        this.config.requestHook!(invocationSpan, { event, context })
+        this.config.requestHook!(invocationSpan, { event, context });
       } catch (e) {
-        diag.error('aws-lambda instrumentation: requestHook error', e)
+        diag.error('aws-lambda instrumentation: requestHook error', e);
       }
     }
     return invocationSpan;
   }
 
-  private _endInvocationSpan(span: Span, err: string | Error | null | undefined): void {
+  private _endInvocationSpan(
+    span: Span,
+    err: string | Error | null | undefined
+  ): void {
     if (span.isRecording()) {
       if (err) {
         span.recordException(err);
@@ -533,10 +481,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
   // never fails
   private async _flush(): Promise<void> {
-    await Promise.all([
-      this._flush_trace(),
-      this._flush_metric()
-    ]);
+    await Promise.all([this._flush_trace(), this._flush_metric()]);
   }
 
   // never fails
@@ -545,7 +490,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       try {
         await this._traceForceFlusher();
       } catch (e) {
-        diag.error('Error while flushing traces', e)
+        diag.error('Error while flushing traces', e);
       }
     } else {
       diag.error(
@@ -560,7 +505,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       try {
         await this._metricForceFlusher();
       } catch (e) {
-        diag.error('Error while flushing metrics', e)
+        diag.error('Error while flushing metrics', e);
       }
     } else {
       diag.error(
@@ -569,7 +514,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     }
   }
 
-  private _errorToString(err: string | Error | null | undefined): string | undefined {
+  private _errorToString(
+    err: string | Error | null | undefined
+  ): string | undefined {
     let errMessage;
     if (typeof err === 'string') {
       errMessage = err;
@@ -584,7 +531,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     this._traceForceFlusher = this._traceForceFlush(tracerProvider);
   }
 
-  private _traceForceFlush(tracerProvider: TracerProvider): (() => Promise<void>) | undefined {
+  private _traceForceFlush(
+    tracerProvider: TracerProvider
+  ): (() => Promise<void>) | undefined {
     if (!tracerProvider) return undefined;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -606,7 +555,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     this._metricForceFlusher = this._metricForceFlush(meterProvider);
   }
 
-  private _metricForceFlush(meterProvider: MeterProvider): (() => Promise<void>) | undefined {
+  private _metricForceFlush(
+    meterProvider: MeterProvider
+  ): (() => Promise<void>) | undefined {
     if (!meterProvider) return undefined;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -635,6 +586,14 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         true
       );
     }
+  }
+
+  private static _extractAccountId(arn: string): string | undefined {
+    const parts = arn.split(':');
+    if (parts.length >= 5) {
+      return parts[4];
+    }
+    return undefined;
   }
 
   private static _defaultEventContextExtractor(event: any): OtelContext {
@@ -689,14 +648,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return answer;
   }
 
-  private static _determineParent(
-    event: any,
-    context: Context,
-    disableAwsContextPropagation: boolean,
-    eventContextExtractor: EventContextExtractor
-  ): OtelContext {
+  private _determineUpstreamContext(event: any, context: Context): OtelContext {
     let parent: OtelContext | undefined = undefined;
-    if (!disableAwsContextPropagation) {
+    if (!this.config.disableAwsContextPropagation) {
       const lambdaTraceHeader = process.env[traceContextEnvironmentKey];
       if (lambdaTraceHeader) {
         parent = awsPropagator.extract(
@@ -718,6 +672,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         }
       }
     }
+    const eventContextExtractor =
+      this.config.eventContextExtractor ||
+      AwsLambdaInstrumentation._defaultEventContextExtractor;
     const extractedContext = safeExecuteInTheMiddle(
       () => eventContextExtractor(event, context),
       e => {
