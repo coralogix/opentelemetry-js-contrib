@@ -26,7 +26,7 @@ import * as assert from 'assert';
 import * as pg from 'pg';
 import { PgInstrumentationConfig } from '../src';
 import { AttributeNames } from '../src/enums/AttributeNames';
-import { PgClientExtended } from '../src/internal-types';
+import { PgClientExtended, PgPoolOptionsParams } from '../src/internal-types';
 import * as utils from '../src/utils';
 import { SEMATTRS_NET_PEER_PORT } from '@opentelemetry/semantic-conventions';
 
@@ -49,15 +49,13 @@ const getLatestSpan = () => {
 describe('utils.ts', () => {
   const client = new pg.Client(CONFIG) as PgClientExtended;
   let contextManager: AsyncHooksContextManager;
-  const provider = new BasicTracerProvider();
+  const provider = new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(memoryExporter)],
+  });
   const tracer = provider.getTracer('external');
 
   const instrumentationConfig: PgInstrumentationConfig & InstrumentationConfig =
     {};
-
-  before(() => {
-    provider.addSpanProcessor(new SimpleSpanProcessor(memoryExporter));
-  });
 
   beforeEach(() => {
     contextManager = new AsyncHooksContextManager().enable();
@@ -235,6 +233,24 @@ describe('utils.ts', () => {
           port: Number.MAX_VALUE,
         })[SEMATTRS_NET_PEER_PORT],
         Number.MAX_VALUE
+      );
+    });
+  });
+
+  describe('.getPoolName()', () => {
+    it('creation of pool name based on pool config', () => {
+      const dummyPool: PgPoolOptionsParams = {
+        host: 'host_name',
+        port: 1234,
+        user: 'username',
+        database: 'database_name',
+        idleTimeoutMillis: 10,
+        maxClient: 5,
+      };
+
+      assert.strictEqual(
+        utils.getPoolName(dummyPool),
+        'host_name:1234/database_name'
       );
     });
   });
