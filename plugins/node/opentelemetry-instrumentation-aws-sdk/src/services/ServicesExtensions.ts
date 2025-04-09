@@ -25,6 +25,8 @@ import { DynamodbServiceExtension } from './dynamodb';
 import { SnsServiceExtension } from './sns';
 import { LambdaServiceExtension } from './lambda';
 import { EventBridgeServiceExtension } from './event-bridge';
+import { S3ServiceExtension } from './s3';
+import { KinesisServiceExtension } from './kinesis';
 
 export class ServicesExtensions implements ServiceExtension {
   services: Map<string, ServiceExtension> = new Map();
@@ -35,6 +37,8 @@ export class ServicesExtensions implements ServiceExtension {
     this.services.set('DynamoDB', new DynamodbServiceExtension());
     this.services.set('Lambda', new LambdaServiceExtension());
     this.services.set('EventBridge', new EventBridgeServiceExtension());
+    this.services.set('S3', new S3ServiceExtension());
+    this.services.set('Kinesis', new KinesisServiceExtension());
   }
 
   requestPreSpanHook(

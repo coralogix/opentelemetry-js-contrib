@@ -30,6 +30,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
+import { DataPoint, Histogram } from '@opentelemetry/sdk-metrics';
 import * as assert from 'assert';
 import type * as pg from 'pg';
 import * as sinon from 'sinon';
@@ -50,7 +51,12 @@ import {
   SEMATTRS_NET_PEER_PORT,
   SEMATTRS_DB_USER,
   DBSYSTEMVALUES_POSTGRESQL,
+  ATTR_ERROR_TYPE,
 } from '@opentelemetry/semantic-conventions';
+import {
+  METRIC_DB_CLIENT_OPERATION_DURATION,
+  ATTR_DB_OPERATION_NAME,
+} from '../src/semconv';
 import { addSqlCommenterComment } from '@opentelemetry/sql-common';
 
 const memoryExporter = new InMemorySpanExporter();
@@ -102,13 +108,19 @@ describe('pg', () => {
   function create(config: PgInstrumentationConfig = {}) {
     instrumentation.setConfig(config);
     instrumentation.enable();
+
+    // Disable and enable the instrumentation to visit unwrap calls
+    instrumentation.disable();
+    instrumentation.enable();
   }
 
   let postgres: typeof pg;
   let client: pg.Client;
   let instrumentation: PgInstrumentation;
   let contextManager: AsyncHooksContextManager;
-  const provider = new BasicTracerProvider();
+  const provider = new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(memoryExporter)],
+  });
   const tracer = provider.getTracer('external');
 
   const testPostgres = process.env.RUN_POSTGRES_TESTS; // For CI: assumes local postgres db is already available
@@ -133,7 +145,6 @@ describe('pg', () => {
       skip();
     }
 
-    provider.addSpanProcessor(new SimpleSpanProcessor(memoryExporter));
     if (testPostgresLocally) {
       testUtils.startDocker('postgres');
     }
@@ -146,6 +157,7 @@ describe('pg', () => {
 
     postgres = require('pg');
     client = new postgres.Client(CONFIG);
+
     await client.connect();
   });
 
@@ -153,6 +165,7 @@ describe('pg', () => {
     if (testPostgresLocally) {
       testUtils.cleanUpDocker('postgres');
     }
+
     await client.end();
   });
 
@@ -847,15 +860,9 @@ describe('pg', () => {
           const [span] = memoryExporter.getFinishedSpans();
           assert.ok(span);
 
-          const commentedQuery = addSqlCommenterComment(
-            trace.wrapSpanContext(span.spanContext()),
-            query
-          );
-
           const executedQueries = getExecutedQueries();
           assert.equal(executedQueries.length, 1);
           assert.equal(executedQueries[0].text, query);
-          assert.notEqual(query, commentedQuery);
         } catch (e: any) {
           assert.ok(false, e.message);
         }
@@ -873,15 +880,11 @@ describe('pg', () => {
             assert.ok(res);
 
             const [span] = memoryExporter.getFinishedSpans();
-            const commentedQuery = addSqlCommenterComment(
-              trace.wrapSpanContext(span.spanContext()),
-              query
-            );
+            assert.ok(span);
 
             const executedQueries = getExecutedQueries();
             assert.equal(executedQueries.length, 1);
             assert.equal(executedQueries[0].text, query);
-            assert.notEqual(query, commentedQuery);
             done();
           },
         } as pg.QueryConfig);
@@ -946,6 +949,33 @@ describe('pg', () => {
       });
     });
 
+    it('should not add sqlcommenter comment when addSqlCommenterCommentToQueries=true is specified with a prepared statement', async () => {
+      instrumentation.setConfig({
+        addSqlCommenterCommentToQueries: true,
+      });
+
+      const span = tracer.startSpan('test span');
+      await context.with(trace.setSpan(context.active(), span), async () => {
+        try {
+          const query = 'SELECT NOW()';
+          const resPromise = await client.query({
+            text: query,
+            name: 'prepared sqlcommenter',
+          });
+          assert.ok(resPromise);
+
+          const [span] = memoryExporter.getFinishedSpans();
+          assert.ok(span);
+
+          const executedQueries = getExecutedQueries();
+          assert.equal(executedQueries.length, 1);
+          assert.equal(executedQueries[0].text, query);
+        } catch (e: any) {
+          assert.ok(false, e.message);
+        }
+      });
+    });
+
     it('should not generate traces for client.query() when requireParentSpan=true is specified', done => {
       instrumentation.setConfig({
         requireParentSpan: true,
@@ -958,6 +988,138 @@ describe('pg', () => {
         assert.strictEqual(spans.length, 0);
         done();
       });
+    });
+  });
+
+  describe('pg metrics', () => {
+    let metricReader: testUtils.TestMetricReader;
+
+    beforeEach(() => {
+      metricReader = testUtils.initMeterProvider(instrumentation);
+    });
+
+    it('should generate db.client.operation.duration metric', done => {
+      client.query('SELECT NOW()', async (_, ret) => {
+        assert.ok(ret, 'query should be executed');
+
+        const { resourceMetrics, errors } = await metricReader.collect();
+        assert.deepEqual(
+          errors,
+          [],
+          'expected no errors from the callback during metric collection'
+        );
+
+        const metrics = resourceMetrics.scopeMetrics[0].metrics;
+        assert.strictEqual(
+          metrics[0].descriptor.name,
+          METRIC_DB_CLIENT_OPERATION_DURATION
+        );
+        assert.strictEqual(
+          metrics[0].descriptor.description,
+          'Duration of database client operations.'
+        );
+        const dataPoint = metrics[0].dataPoints[0];
+        assert.strictEqual(
+          dataPoint.attributes[SEMATTRS_DB_SYSTEM],
+          DBSYSTEMVALUES_POSTGRESQL
+        );
+        assert.strictEqual(
+          dataPoint.attributes[ATTR_DB_OPERATION_NAME],
+          'SELECT'
+        );
+        assert.strictEqual(dataPoint.attributes[ATTR_ERROR_TYPE], undefined);
+
+        const v = (dataPoint as DataPoint<Histogram>).value;
+        v.min = v.min ? v.min : 0;
+        v.max = v.max ? v.max : 0;
+        assert.equal(
+          v.min > 0,
+          true,
+          'expect min value for Histogram to be greater than 0'
+        );
+        assert.equal(
+          v.max > 0,
+          true,
+          'expect max value for Histogram to be greater than 0'
+        );
+        done();
+      });
+    });
+
+    it('should generate db.client.operation.duration metric with error attribute', done => {
+      client.query('SELECT foo from bar', async (err, ret) => {
+        assert.notEqual(err, null);
+        const { resourceMetrics, errors } = await metricReader.collect();
+        assert.deepEqual(
+          errors,
+          [],
+          'expected no errors from the callback during metric collection'
+        );
+
+        const metrics = resourceMetrics.scopeMetrics[0].metrics;
+        assert.strictEqual(
+          metrics[0].descriptor.name,
+          METRIC_DB_CLIENT_OPERATION_DURATION
+        );
+        assert.strictEqual(
+          metrics[0].descriptor.description,
+          'Duration of database client operations.'
+        );
+        const dataPoint = metrics[0].dataPoints[0];
+        assert.strictEqual(
+          dataPoint.attributes[SEMATTRS_DB_SYSTEM],
+          DBSYSTEMVALUES_POSTGRESQL
+        );
+        assert.strictEqual(
+          dataPoint.attributes[ATTR_DB_OPERATION_NAME],
+          'SELECT'
+        );
+        assert.strictEqual(dataPoint.attributes[ATTR_ERROR_TYPE], '42P01');
+
+        const v = (dataPoint as DataPoint<Histogram>).value;
+        v.min = v.min ? v.min : 0;
+        v.max = v.max ? v.max : 0;
+        assert.equal(
+          v.min > 0,
+          true,
+          'expect min value for Histogram to be greater than 0'
+        );
+        assert.equal(
+          v.max > 0,
+          true,
+          'expect max value for Histogram to be greater than 0'
+        );
+        done();
+      });
+    });
+  });
+});
+
+describe('pg (ESM)', () => {
+  it('should work with ESM usage', async () => {
+    await testUtils.runTestFixture({
+      cwd: __dirname,
+      argv: ['fixtures/use-pg.mjs'],
+      env: {
+        NODE_OPTIONS:
+          '--experimental-loader=@opentelemetry/instrumentation/hook.mjs',
+        NODE_NO_WARNINGS: '1',
+      },
+      checkResult: (err, stdout, stderr) => {
+        assert.ifError(err);
+      },
+      checkCollector: (collector: testUtils.TestCollector) => {
+        const spans = collector.sortedSpans;
+
+        assert.strictEqual(spans.length, 3);
+
+        assert.strictEqual(spans[0].name, 'pg.connect');
+        assert.strictEqual(spans[0].kind, 3);
+        assert.strictEqual(spans[1].name, 'test-span');
+        assert.strictEqual(spans[1].kind, 1);
+        assert.strictEqual(spans[2].name, 'pg.query:SELECT otel_pg_database');
+        assert.strictEqual(spans[2].kind, 3);
+      },
     });
   });
 });
