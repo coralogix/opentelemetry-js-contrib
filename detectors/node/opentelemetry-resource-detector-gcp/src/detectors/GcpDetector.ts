@@ -15,7 +15,8 @@
  */
 
 import * as gcpMetadata from 'gcp-metadata';
-import { diag } from '@opentelemetry/api';
+import { context, diag } from '@opentelemetry/api';
+import { suppressTracing } from '@opentelemetry/core';
 import {
   DetectorSync,
   ResourceDetectionConfig,
@@ -23,7 +24,6 @@ import {
   ResourceAttributes,
   IResource,
 } from '@opentelemetry/resources';
-import { getEnv } from '@opentelemetry/core';
 import {
   CLOUDPROVIDERVALUES_GCP,
   SEMRESATTRS_CLOUD_ACCOUNT_ID,
@@ -44,7 +44,10 @@ import {
  */
 class GcpDetector implements DetectorSync {
   detect(_config?: ResourceDetectionConfig): IResource {
-    return new Resource({}, this._getAttribures());
+    const attributes = context.with(suppressTracing(context.active()), () =>
+      this._getAttributes()
+    );
+    return new Resource({}, attributes);
   }
 
   /**
@@ -53,7 +56,7 @@ class GcpDetector implements DetectorSync {
    * object with instance metadata. Returns a promise containing an
    * empty {@link ResourceAttributes} if the connection or parsing of the metadata fails.
    */
-  private async _getAttribures(): Promise<ResourceAttributes> {
+  private async _getAttributes(): Promise<ResourceAttributes> {
     if (!(await gcpMetadata.isAvailable())) {
       diag.debug('GcpDetector failed: GCP Metadata unavailable.');
       return {};
@@ -75,7 +78,7 @@ class GcpDetector implements DetectorSync {
     attributes[SEMRESATTRS_CLOUD_AVAILABILITY_ZONE] = zoneId;
     attributes[SEMRESATTRS_CLOUD_PROVIDER] = CLOUDPROVIDERVALUES_GCP;
 
-    if (getEnv().KUBERNETES_SERVICE_HOST)
+    if (process.env.KUBERNETES_SERVICE_HOST)
       this._addK8sAttributes(attributes, clusterName);
 
     return attributes;
@@ -86,12 +89,10 @@ class GcpDetector implements DetectorSync {
     attributes: ResourceAttributes,
     clusterName: string
   ): void {
-    const env = getEnv();
-
     attributes[SEMRESATTRS_K8S_CLUSTER_NAME] = clusterName;
-    attributes[SEMRESATTRS_K8S_NAMESPACE_NAME] = env.NAMESPACE;
-    attributes[SEMRESATTRS_K8S_POD_NAME] = env.HOSTNAME;
-    attributes[SEMRESATTRS_CONTAINER_NAME] = env.CONTAINER_NAME;
+    attributes[SEMRESATTRS_K8S_NAMESPACE_NAME] = process.env.NAMESPACE ?? '';
+    attributes[SEMRESATTRS_K8S_POD_NAME] = process.env.HOSTNAME ?? '';
+    attributes[SEMRESATTRS_CONTAINER_NAME] = process.env.CONTAINER_NAME ?? '';
   }
 
   /** Gets project id from GCP project metadata. */

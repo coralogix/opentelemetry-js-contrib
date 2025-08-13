@@ -57,40 +57,19 @@ export const lambdaTriggers: Record<TriggerOrigin, LambdaTrigger<any>> = {
   [TriggerOrigin.CLOUDWATCH_LOGS]: CloudWatchLogsTrigger,
 };
 
-// TODO infer from lambdaTriggers map
-export const getEventTrigger = (
+export function initializeEventTriggerSpan(
   event: any
-): TriggerSpanInitializerResult | undefined => {
-  if (ApiGatewayRestTrigger.validator(event)) {
-    return ApiGatewayRestTrigger.initializer(event);
-  } else if (ApiGatewayHttpTrigger.validator(event)) {
-    return ApiGatewayHttpTrigger.initializer(event);
-  } else if (SQSTrigger.validator(event)) {
-    return SQSTrigger.initializer(event);
-  } else if (SNSTrigger.validator(event)) {
-    return SNSTrigger.initializer(event);
-  } else if (DynamoDBTrigger.validator(event)) {
-    return DynamoDBTrigger.initializer(event);
-  } else if (S3Trigger.validator(event)) {
-    return S3Trigger.initializer(event);
-  } else if (SESTrigger.validator(event)) {
-    return SESTrigger.initializer(event);
-  } else if (CognitoTrigger.validator(event)) {
-    return CognitoTrigger.initializer(event);
-  } else if (EventBridgeTrigger.validator(event)) {
-    return EventBridgeTrigger.initializer(event);
-  } else if (CloudWatchLogsTrigger.validator(event)) {
-    return CloudWatchLogsTrigger.initializer(event);
-  } else {
-    return undefined;
-  }
-};
+): TriggerSpanInitializerResult | undefined {
+  return Object.values(lambdaTriggers)
+    .find(trigger => trigger.validator(event))
+    ?.initializer(event);
+}
 
 export const finalizeSpan = (
   config: AwsLambdaInstrumentationConfig,
   origin: TriggerOrigin,
   triggerSpan: Span,
-  response: any,
+  response: any
 ) => {
   const trigger = lambdaTriggers[origin];
   if (trigger.finalizer) {
