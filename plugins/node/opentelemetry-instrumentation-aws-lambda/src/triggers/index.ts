@@ -25,6 +25,7 @@ import { EventBridgeTrigger } from './event-bridge';
 import { DynamoDBTrigger } from './dynamodb-stream';
 import { Span } from '@opentelemetry/api';
 import { CloudWatchLogsTrigger } from './cloudwatch-logs';
+import { StepFunctionsTrigger } from './step-functions';
 import { AwsLambdaInstrumentationConfig } from '../types';
 
 export const LambdaAttributes = {
@@ -42,6 +43,7 @@ export const enum TriggerOrigin {
   COGNITO = 'Cognito',
   EVENT_BRIDGE = 'EventBridge',
   CLOUDWATCH_LOGS = 'CloudWatch Logs',
+  STEP_FUNCTIONS = 'Step Functions',
 }
 
 export const lambdaTriggers: Record<TriggerOrigin, LambdaTrigger<any>> = {
@@ -55,6 +57,7 @@ export const lambdaTriggers: Record<TriggerOrigin, LambdaTrigger<any>> = {
   [TriggerOrigin.COGNITO]: CognitoTrigger,
   [TriggerOrigin.EVENT_BRIDGE]: EventBridgeTrigger,
   [TriggerOrigin.CLOUDWATCH_LOGS]: CloudWatchLogsTrigger,
+  [TriggerOrigin.STEP_FUNCTIONS]: StepFunctionsTrigger,
 };
 
 export function initializeEventTriggerSpan(
