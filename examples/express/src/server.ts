@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-// eslint-disable-next-line import/order, import/extensions
 import { setupTracing } from './tracer';
+
+// Initialize tracing before importing other modules
+setupTracing('example-express-server');
 
 // Require in rest of modules
 import * as express from 'express';
 import * as axios from 'axios';
 import { RequestHandler } from 'express';
-
-setupTracing('example-express-server');
 
 // Setup express
 const app = express();

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-// eslint-disable-next-line import/order, import/extensions
 import { setupTracing } from './tracer';
+
+// Initialize tracing before importing other moduless
+const tracer = setupTracing('example-express-client');
 
 import * as api from '@opentelemetry/api';
 import * as axios from 'axios';
-
-const tracer = setupTracing('example-express-client');
 
 async function makeRequest() {
   const span = tracer.startSpan('client.makeRequest()', {
