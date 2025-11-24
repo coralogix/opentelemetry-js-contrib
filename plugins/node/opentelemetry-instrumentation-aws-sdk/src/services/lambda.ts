@@ -113,10 +113,6 @@ const injectLambdaPropagationContext = (
         ...parsedClientContext.custom,
         ...propagatedContext,
       },
-      custom: {
-        ...parsedClientContext.custom,
-        ...propagatedContext,
-      },
     };
 
     const encodedClientContext = Buffer.from(
