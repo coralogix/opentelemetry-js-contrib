@@ -95,9 +95,9 @@ type InstrumentationContext = {
 export const lambdaMaxInitInMilliseconds = 10_000;
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
-  private _traceForceFlusher?: () => Promise<void>;
-  private _metricForceFlusher?: () => Promise<void>;
-  private config: AwsLambdaInstrumentationConfig;
+  private declare _traceForceFlusher?: () => Promise<void>;
+  private declare _metricForceFlusher?: () => Promise<void>;
+  private declare config: AwsLambdaInstrumentationConfig;
 
   constructor(config: AwsLambdaInstrumentationConfig = {}) {
     super(PACKAGE_NAME, PACKAGE_VERSION, config);
