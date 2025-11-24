@@ -1,4 +1,14 @@
+<!-- markdownlint-disable MD007 MD034 -->
 # Changelog
+
+## [0.23.1](https://github.com/open-telemetry/opentelemetry-js-contrib/compare/instrumentation-dataloader-v0.23.0...instrumentation-dataloader-v0.23.1) (2025-09-24)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @opentelemetry/contrib-test-utils bumped from ^0.51.0 to ^0.52.0
 
 ## [0.23.0](https://github.com/open-telemetry/opentelemetry-js-contrib/compare/instrumentation-dataloader-v0.22.0...instrumentation-dataloader-v0.23.0) (2025-09-10)
 
@@ -285,5 +295,3 @@
 
 * add dataloader instrumentation ([#1171](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/1171)) ([3898b11](https://github.com/open-telemetry/opentelemetry-js-contrib/commit/3898b11800f857c75c286f22c4633b5baf4e1f84))
 * upstream mocha instrumentation testing plugin from ext-js [#621](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/621) ([#669](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/669)) ([a5170c4](https://github.com/open-telemetry/opentelemetry-js-contrib/commit/a5170c494706a2bec3ba51e59966d0ca8a41d00e))
-
-## Changelog

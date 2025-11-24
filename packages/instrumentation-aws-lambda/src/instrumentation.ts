@@ -38,13 +38,9 @@ import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import {
-  ATTR_URL_FULL,
-  SEMATTRS_FAAS_EXECUTION,
-  SEMRESATTRS_CLOUD_ACCOUNT_ID,
-  SEMRESATTRS_FAAS_ID,
-} from '@opentelemetry/semantic-conventions';
-import { ATTR_FAAS_COLDSTART } from './semconv';
+import { ATTR_URL_FULL } from '@opentelemetry/semantic-conventions';
+import { ATTR_CLOUD_ACCOUNT_ID, ATTR_FAAS_COLDSTART } from './semconv';
+import { ATTR_FAAS_EXECUTION, ATTR_FAAS_ID } from './semconv-obsolete';
 
 import {
   APIGatewayProxyEventHeaders,
@@ -93,6 +89,10 @@ type InstrumentationContext = {
 // Lambda's init phase is limited to 10 seconds. Otherwise the sandbox is
 // re-nitialized from scratch.
 export const lambdaMaxInitInMilliseconds = 10_000;
+export const AWS_HANDLER_STREAMING_SYMBOL = Symbol.for(
+  'aws.lambda.runtime.handler.streaming'
+);
+export const AWS_HANDLER_STREAMING_RESPONSE = 'response';
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
   private declare _traceForceFlusher?: () => Promise<void>;
@@ -420,10 +420,10 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       {
         kind: SpanKind.SERVER,
         attributes: {
-          [SEMATTRS_FAAS_EXECUTION]: context.awsRequestId,
+          [ATTR_FAAS_EXECUTION]: context.awsRequestId,
           [SPAN_ROLE_ATTRIBUTE]: 'invocation',
-          [SEMRESATTRS_FAAS_ID]: context.invokedFunctionArn,
-          [SEMRESATTRS_CLOUD_ACCOUNT_ID]:
+          [ATTR_FAAS_ID]: context.invokedFunctionArn,
+          [ATTR_CLOUD_ACCOUNT_ID]:
             AwsLambdaInstrumentation._extractAccountId(
               context.invokedFunctionArn
             ),

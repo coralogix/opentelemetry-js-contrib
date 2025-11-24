@@ -1,4 +1,25 @@
+<!-- markdownlint-disable MD007 MD034 -->
 # Changelog
+
+## [0.40.1](https://github.com/open-telemetry/opentelemetry-js-contrib/compare/resource-detector-gcp-v0.40.0...resource-detector-gcp-v0.40.1) (2025-09-24)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @opentelemetry/contrib-test-utils bumped from ^0.51.0 to ^0.52.0
+
+## [0.40.0](https://github.com/open-telemetry/opentelemetry-js-contrib/compare/resource-detector-gcp-v0.39.0...resource-detector-gcp-v0.40.0) (2025-09-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **resource-detector-gcp:** contribute Google's comprehensive resource detector ([#3007](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3007))
+
+### Features
+
+* **resource-detector-gcp:** contribute Google's comprehensive resource detector ([#3007](https://github.com/open-telemetry/opentelemetry-js-contrib/issues/3007)) ([d60ff3a](https://github.com/open-telemetry/opentelemetry-js-contrib/commit/d60ff3ae82dd23a30d951138cf4a1363ef7c5138))
 
 ## [0.39.0](https://github.com/open-telemetry/opentelemetry-js-contrib/compare/resource-detector-gcp-v0.38.0...resource-detector-gcp-v0.39.0) (2025-09-10)
 
