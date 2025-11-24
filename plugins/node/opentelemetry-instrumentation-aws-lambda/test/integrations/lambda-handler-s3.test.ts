@@ -36,8 +36,9 @@ import { assertSpanSuccess } from './lambda-handler.test';
 import { LambdaAttributes, TriggerOrigin } from '../../src/triggers';
 
 const memoryExporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(new BatchSpanProcessor(memoryExporter));
+const provider = new NodeTracerProvider({
+  spanProcessors: [new BatchSpanProcessor(memoryExporter)],
+});
 provider.register();
 
 /*
@@ -162,8 +163,8 @@ describe('S3 handler', () => {
       const [spanLambda, sqsSpan] = spans;
       assertSpanSuccess(spanLambda);
       assertS3EventSpanSuccess(sqsSpan, s3Event);
-      assert.strictEqual(sqsSpan.parentSpanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
+      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
     });
 
     it('should export two valid span', async () => {
@@ -176,8 +177,8 @@ describe('S3 handler', () => {
       const [spanLambda, sqsSpan] = spans;
       assertSpanSuccess(spanLambda);
       assertS3EventSpanSuccess(sqsSpan, s3Event);
-      assert.strictEqual(sqsSpan.parentSpanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
+      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
     });
   });
 });

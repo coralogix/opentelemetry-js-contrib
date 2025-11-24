@@ -52,8 +52,9 @@ import { LambdaAttributes, TriggerOrigin } from '../../src/triggers';
 
 const awsPropagator = new AWSXRayPropagator();
 const memoryExporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(new BatchSpanProcessor(memoryExporter));
+const provider = new NodeTracerProvider({
+  spanProcessors: [new BatchSpanProcessor(memoryExporter)],
+});
 provider.register();
 
 /*
@@ -241,8 +242,8 @@ describe('SQS handler', () => {
       const [spanLambda, sqsSpan] = spans;
       assertSpanSuccess(spanLambda);
       assertSQSEventSpanSuccess(sqsSpan, sqsRecord1.eventSourceARN);
-      assert.strictEqual(sqsSpan.parentSpanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
+      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
     });
 
     it('sqs span should reject when throwing error', async () => {

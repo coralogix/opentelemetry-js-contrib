@@ -28,10 +28,20 @@ import {
   NormalizedRequest,
   NormalizedResponse,
 } from '../types';
-import {
-  PutEventsRequest,
-  PutEventsRequestEntry,
-} from 'aws-sdk/clients/eventbridge';
+// Types for AWS SDK v2 EventBridge PutEvents
+// Since we only need the interface, it is being copied here
+interface PutEventsRequestEntry {
+  Detail?: string | object;
+  DetailType?: string;
+  Resources?: string[];
+  Source?: string;
+  Time?: Date;
+  TraceHeader?: string;
+}
+
+interface PutEventsRequest {
+  Entries: PutEventsRequestEntry[];
+}
 
 const CONTEXT_KEY = '_context';
 type EventBridgeDetailWithContext = { [CONTEXT_KEY]?: object } & object;
@@ -44,7 +54,7 @@ export class EventBridgeServiceExtension implements ServiceExtension {
   requestPostSpanHook = (request: NormalizedRequest) => {
     if (request.commandName === 'PutEvents') {
       const putEventsRequest = request.commandInput as PutEventsRequest;
-      putEventsRequest.Entries.forEach(entry => {
+      putEventsRequest.Entries.forEach((entry: PutEventsRequestEntry) => {
         const details = this.getDetailsFromEvent(entry);
         if (details === undefined) {
           // failure in parsing details

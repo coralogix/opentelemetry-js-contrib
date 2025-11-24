@@ -41,8 +41,9 @@ import { APIGatewayProxyEventV2 } from 'aws-lambda/trigger/api-gateway-proxy';
 import { LambdaAttributes, TriggerOrigin } from '../../src/triggers';
 
 const memoryExporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(new BatchSpanProcessor(memoryExporter));
+const provider = new NodeTracerProvider({
+  spanProcessors: [new BatchSpanProcessor(memoryExporter)],
+});
 provider.register();
 
 describe('gateway API handler', () => {
@@ -196,9 +197,9 @@ describe('gateway API handler', () => {
         spanGateway.attributes[SemanticAttributes.HTTP_STATUS_CODE],
         200
       );
-      assert.strictEqual(spanGateway.parentSpanId, undefined);
+      assert.strictEqual(spanGateway.parentSpanContext?.spanId, undefined);
       assert.strictEqual(
-        spanLambda.parentSpanId,
+        spanLambda.parentSpanContext?.spanId,
         spanGateway.spanContext().spanId
       );
     });
@@ -224,14 +225,14 @@ describe('gateway API handler', () => {
 
       assertSpanSuccess(spanLambda);
       assertRestGatewaySpanFailure(spanGateway);
-      assert.strictEqual(spanGateway.parentSpanId, undefined);
+      assert.strictEqual(spanGateway.parentSpanContext?.spanId, undefined);
       assert.strictEqual(
         spanGateway.attributes[SemanticAttributes.HTTP_STATUS_CODE],
         500
       );
 
       assert.strictEqual(
-        spanLambda.parentSpanId,
+        spanLambda.parentSpanContext?.spanId,
         spanGateway.spanContext().spanId
       );
     });
@@ -451,9 +452,9 @@ describe('gateway API handler', () => {
           spanGateway.attributes[SemanticAttributes.HTTP_STATUS_CODE],
           200
         );
-        assert.strictEqual(spanGateway.parentSpanId, undefined);
+        assert.strictEqual(spanGateway.parentSpanContext?.spanId, undefined);
         assert.strictEqual(
-          spanLambda.parentSpanId,
+          spanLambda.parentSpanContext?.spanId,
           spanGateway.spanContext().spanId
         );
       });
@@ -479,14 +480,14 @@ describe('gateway API handler', () => {
 
         assertSpanSuccess(spanLambda);
         assertHttpGatewaySpanFailure(spanGateway);
-        assert.strictEqual(spanGateway.parentSpanId, undefined);
+        assert.strictEqual(spanGateway.parentSpanContext?.spanId, undefined);
         assert.strictEqual(
           spanGateway.attributes[SemanticAttributes.HTTP_STATUS_CODE],
           500
         );
 
         assert.strictEqual(
-          spanLambda.parentSpanId,
+          spanLambda.parentSpanContext?.spanId,
           spanGateway.spanContext().spanId
         );
       });

@@ -45,8 +45,9 @@ import { assertSpanSuccess } from './lambda-handler.test';
 import { CONTEXT_KEY as EVENT_BRIDGE_CONTEXT_KEY } from '../../src/triggers/event-bridge';
 
 const memoryExporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider();
-provider.addSpanProcessor(new BatchSpanProcessor(memoryExporter));
+const provider = new NodeTracerProvider({
+  spanProcessors: [new BatchSpanProcessor(memoryExporter)],
+});
 provider.register();
 
 const exampleEvent: EventBridgeEvent<string, any> = {
@@ -152,8 +153,8 @@ describe('Event Bridge handler', () => {
       const [spanLambda, ebSpan] = spans;
       assertSpanSuccess(spanLambda);
       assertEventBridgeSpan(ebSpan, exampleEventWithLink);
-      assert.strictEqual(ebSpan.parentSpanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanId, ebSpan.spanContext().spanId);
+      assert.strictEqual(ebSpan.parentSpanContext?.spanId, undefined);
+      assert.strictEqual(spanLambda.parentSpanContext?.spanId, ebSpan.spanContext().spanId);
     });
 
     it(`EventBridge span links should be extracted from event details under the '${EVENT_BRIDGE_CONTEXT_KEY}' key`, async () => {
