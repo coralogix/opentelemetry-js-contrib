@@ -47,6 +47,7 @@ import {
   Callback,
   Context,
   Handler,
+  StreamifyHandler,
 } from 'aws-lambda';
 
 import { AwsLambdaInstrumentationConfig } from './types';
@@ -94,6 +95,26 @@ export const AWS_HANDLER_STREAMING_SYMBOL = Symbol.for(
 );
 export const AWS_HANDLER_STREAMING_RESPONSE = 'response';
 
+/**
+ * Determines if callback-based handlers are supported based on the Node.js runtime version.
+ * Returns true if callbacks are supported (Node.js < 24).
+ * Returns false if AWS_EXECUTION_ENV is not set or doesn't match the expected format.
+ */
+function isSupportingCallbacks(): boolean {
+  const executionEnv = process.env.AWS_EXECUTION_ENV;
+  if (!executionEnv) {
+    return false;
+  }
+
+  // AWS_EXECUTION_ENV format: AWS_Lambda_nodejs24.x, AWS_Lambda_nodejs22.x, etc.
+  const match = executionEnv.match(/AWS_Lambda_nodejs(\d+)\./);
+  if (match && match[1]) {
+    return parseInt(match[1], 10) < 24;
+  }
+
+  return false;
+}
+
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
   private declare _traceForceFlusher?: () => Promise<void>;
   private declare _metricForceFlusher?: () => Promise<void>;
@@ -108,9 +129,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return [];
   }
 
-  public getPatchHandler(original: Handler) {
+  public getPatchHandler(
+    original: Handler | StreamifyHandler
+  ): Handler | StreamifyHandler {
     diag.debug('patching handler function');
-    const self = this;
+    const plugin = this;
 
     let requestHandledBefore = false;
     let requestIsColdStart = true;
@@ -147,79 +170,139 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       }
     }
 
-    return function patchedHandler(
+    if (this._isStreamingHandler(original)) {
+      return function patchedStreamingHandler(
+        this: never,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        event: any,
+        responseStream: Parameters<StreamifyHandler>[1],
+        context: Context
+      ) {
+        _onRequest();
+
+        return plugin._before_execution(event, context, requestIsColdStart).then(
+          instrCtx =>
+            otelContext.with(
+              trace.setSpan(
+                instrCtx.invocationParentContext,
+                instrCtx.invocationSpan
+              ),
+              () =>
+                plugin._executePromiseHandler(
+                  () => original.apply(this, [event, responseStream, context]),
+                  context,
+                  instrCtx
+                )
+            ),
+          err => plugin._handleBeforeExecutionFailurePromise(err, context)
+        );
+      };
+    }
+
+    const supportsCallbacks = isSupportingCallbacks();
+
+    if (supportsCallbacks) {
+      return function patchedHandlerWithCallback(
+        this: never,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        event: any,
+        context: Context,
+        callback?: Callback
+      ) {
+        _onRequest();
+
+        return plugin._before_execution(event, context, requestIsColdStart).then(
+          instrCtx =>
+            otelContext.with(
+              trace.setSpan(
+                instrCtx.invocationParentContext,
+                instrCtx.invocationSpan
+              ),
+              () => {
+                if (callback) {
+                  plugin._invokeWithCallback(
+                    original as Handler,
+                    this,
+                    event,
+                    context,
+                    callback,
+                    instrCtx
+                  );
+                  return;
+                }
+
+                return plugin._executePromiseHandler(
+                  () =>
+                    (original as (event: any, context: Context) => any).apply(
+                      this,
+                      [event, context]
+                    ),
+                  context,
+                  instrCtx
+                );
+              }
+            ),
+          err =>
+            callback
+              ? plugin._handleBeforeExecutionFailureCallback(
+                  err,
+                  context,
+                  callback
+                )
+              : plugin._handleBeforeExecutionFailurePromise(err, context)
+        );
+      };
+    }
+
+    // Node.js 24+: Promise-only handlers (but keep callback compatibility for legacy code)
+    return function patchedPromiseHandler(
       this: never,
-      // The event can be a user type, it truly is any.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       event: any,
       context: Context,
-      callback: Callback
-    ): void {
+      callback?: Callback
+    ) {
       _onRequest();
 
-      self._before_execution(event, context, requestIsColdStart).then(
-        instrCtx => {
+      return plugin._before_execution(event, context, requestIsColdStart).then(
+        instrCtx =>
           otelContext.with(
             trace.setSpan(
               instrCtx.invocationParentContext,
               instrCtx.invocationSpan
             ),
             () => {
-              // Lambda seems to pass a callback even if handler is of Promise form, so we wrap all the time before calling
-              // the handler and see if the result is a Promise or not. In such a case, the callback is usually ignored. If
-              // the handler happened to both call the callback and complete a returned Promise, whichever happens first will
-              // win and the latter will be ignored.
-              const wrappedCallback = self._wrapCallback(callback, instrCtx);
-
-              let maybePromise: any;
-              try {
-                maybePromise = original.apply(this, [
+              if (callback) {
+                plugin._invokeWithCallback(
+                  original as Handler,
+                  this,
                   event,
                   context,
-                  wrappedCallback,
-                ]);
-              } catch (err: any) {
-                // Catching synchronous failures
-                diag.debug('handler threw synchronously');
-                self._after_execution(instrCtx, err, undefined).then(() => {
-                  context.callbackWaitsForEmptyEventLoop = false;
-                  diag.debug('calling AWS callback');
-                  callback(err, undefined);
-                });
-                return;
-              }
-              if (typeof maybePromise?.then === 'function') {
-                diag.debug('handler returned a promise');
-                // Promise based async handler
-                maybePromise.then(
-                  async (value: any) => {
-                    diag.debug('handler promise completed');
-                    await self._after_execution(instrCtx, undefined, value);
-                    context.callbackWaitsForEmptyEventLoop = false;
-                    diag.debug('calling AWS callback');
-                    callback(undefined, value);
-                  },
-                  async (err: Error | string) => {
-                    diag.debug('handler promise failed');
-                    await self._after_execution(instrCtx, err, undefined);
-                    context.callbackWaitsForEmptyEventLoop = false;
-                    diag.debug('calling AWS callback');
-                    callback(err, undefined);
-                  }
+                  callback,
+                  instrCtx
                 );
-              } else {
-                diag.debug('handler returned synchronously (callback based)');
+                return undefined;
               }
+
+              return plugin._executePromiseHandler(
+                () =>
+                  (original as (event: any, context: Context) => any).apply(
+                    this,
+                    [event, context]
+                  ),
+                context,
+                instrCtx
+              );
             }
-          );
-        },
-        async err => {
-          diag.error('_before_execution failed', err);
-          await self._after_execution(undefined, err, undefined);
-          context.callbackWaitsForEmptyEventLoop = false;
-          diag.debug('calling AWS callback');
-          callback(err, undefined);
-        }
+          ),
+        err =>
+          callback
+            ? plugin._handleBeforeExecutionFailureCallback(
+                err,
+                context,
+                callback
+              )
+            : plugin._handleBeforeExecutionFailurePromise(err, context)
       );
     };
   }
@@ -477,6 +560,175 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
         originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
       });
     };
+  }
+
+  private _invokeWithCallback(
+    original: Handler,
+    thisArg: unknown,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    event: any,
+    context: Context,
+    callback: Callback,
+    instrumentationContext: InstrumentationContext
+  ): void {
+    const wrappedCallback = this._wrapCallback(callback, instrumentationContext);
+
+    let maybePromise: unknown;
+    try {
+      maybePromise = original.apply(thisArg, [event, context, wrappedCallback]);
+    } catch (err) {
+      diag.debug('handler threw synchronously');
+      this._after_execution(instrumentationContext, err as Error, undefined).then(
+        () => {
+          this._markEventLoopDontWait(context);
+          diag.debug('calling AWS callback');
+          callback(err as Error, undefined);
+        }
+      );
+      return;
+    }
+
+    if (
+      typeof maybePromise === 'object' &&
+      maybePromise !== null &&
+      typeof (maybePromise as PromiseLike<unknown>).then === 'function'
+    ) {
+      diag.debug('handler returned a promise');
+      Promise.resolve(maybePromise).then(
+        (value: unknown) => {
+          diag.debug('handler promise completed');
+          return this._after_execution(instrumentationContext, undefined, value).then(
+            () => {
+              this._markEventLoopDontWait(context);
+              diag.debug('calling AWS callback');
+              callback(undefined, value);
+            }
+          );
+        },
+        (err: unknown) => {
+          diag.debug('handler promise failed');
+          return this._after_execution(
+            instrumentationContext,
+            err as Error | string,
+            undefined
+          ).then(
+            () => {
+              this._markEventLoopDontWait(context);
+              diag.debug('calling AWS callback');
+              callback(err as Error | string, undefined);
+            }
+          );
+        }
+      );
+    } else {
+      diag.debug('handler returned synchronously (callback based)');
+    }
+  }
+
+  private _executePromiseHandler(
+    invokeOriginal: () => any,
+    context: Context,
+    instrumentationContext: InstrumentationContext
+  ): Promise<any> {
+    let maybePromise: unknown;
+    try {
+      maybePromise = invokeOriginal();
+    } catch (err) {
+      return this._handlePromiseRejection(
+        err as Error | string,
+        context,
+        instrumentationContext
+      );
+    }
+
+    if (
+      typeof maybePromise === 'object' &&
+      maybePromise !== null &&
+      typeof (maybePromise as PromiseLike<unknown>).then === 'function'
+    ) {
+      return Promise.resolve(maybePromise).then(
+        (value: unknown) =>
+          this._handlePromiseResolution(
+            value,
+            context,
+            instrumentationContext
+          ),
+        (err: unknown) =>
+          this._handlePromiseRejection(
+            err as Error | string,
+            context,
+            instrumentationContext
+          )
+      );
+    }
+
+    return this._handlePromiseResolution(
+      maybePromise,
+      context,
+      instrumentationContext
+    );
+  }
+
+  private async _handlePromiseResolution(
+    value: unknown,
+    context: Context,
+    instrumentationContext: InstrumentationContext
+  ) {
+    diag.debug('handler promise completed');
+    await this._after_execution(instrumentationContext, undefined, value);
+    this._markEventLoopDontWait(context);
+    return value;
+  }
+
+  private async _handlePromiseRejection(
+    err: Error | string,
+    context: Context,
+    instrumentationContext: InstrumentationContext
+  ) {
+    diag.debug('handler promise failed');
+    await this._after_execution(instrumentationContext, err, undefined);
+    this._markEventLoopDontWait(context);
+    throw err;
+  }
+
+  private async _handleBeforeExecutionFailurePromise(
+    err: Error | string,
+    context: Context
+  ): Promise<never> {
+    diag.error('_before_execution failed', err);
+    await this._after_execution(undefined, err, undefined);
+    this._markEventLoopDontWait(context);
+    throw err;
+  }
+
+  private async _handleBeforeExecutionFailureCallback(
+    err: Error | string,
+    context: Context,
+    callback: Callback
+  ): Promise<void> {
+    diag.error('_before_execution failed', err);
+    await this._after_execution(undefined, err, undefined);
+    this._markEventLoopDontWait(context);
+    diag.debug('calling AWS callback');
+    callback(err, undefined);
+  }
+
+  private _markEventLoopDontWait(context: Context) {
+    try {
+      context.callbackWaitsForEmptyEventLoop = false;
+    } catch (e) {
+      diag.debug('failed to set callbackWaitsForEmptyEventLoop', e);
+    }
+  }
+
+  private _isStreamingHandler<TEvent, TResult>(
+    handler: Handler<TEvent, TResult> | StreamifyHandler<TEvent, TResult>
+  ): handler is StreamifyHandler<TEvent, TResult> {
+    return (
+      (handler as unknown as Record<symbol, unknown>)[
+        AWS_HANDLER_STREAMING_SYMBOL
+      ] === AWS_HANDLER_STREAMING_RESPONSE
+    );
   }
 
   // never fails
