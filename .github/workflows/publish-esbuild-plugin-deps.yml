@@ -1,0 +1,53 @@
+name: publish esbuild plugin deps
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch, tag, or SHA) to publish from
+        required: false
+        default: coralogix-autoinstrumentation
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          registry-url: https://registry.npmjs.org/
+      - run: |
+          for pkg in packages/instrumentation-aws-lambda packages/instrumentation-aws-sdk packages/instrumentation-mongodb; do
+            (
+              cd "$pkg"
+              sed -i -e 's/"name": "@opentelemetry\//"name": "@coralogix\//g' package.json
+              # Keep import name but resolve to the Coralogix fork at the same version range.
+              INSTR_SECTION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log('dependencies'); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log('peerDependencies');")
+              INSTR_VERSION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log(p.dependencies['@opentelemetry/instrumentation']); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log(p.peerDependencies['@opentelemetry/instrumentation']);")
+              if [ -n "$INSTR_SECTION" ] && [ -n "$INSTR_VERSION" ]; then
+                npm pkg set "${INSTR_SECTION}.@opentelemetry/instrumentation=npm:@coralogix/instrumentation@${INSTR_VERSION}"
+              fi
+            )
+          done
+      - run: npm install
+      - run: npm publish --access public
+        working-directory: ./packages/instrumentation-aws-lambda
+        env:
+          # Build artifacts are already checked in on the release branch.
+          NPM_CONFIG_IGNORE_SCRIPTS: true
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      - run: npm publish --access public
+        working-directory: ./packages/instrumentation-aws-sdk
+        env:
+          # Build artifacts are already checked in on the release branch.
+          NPM_CONFIG_IGNORE_SCRIPTS: true
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      - run: npm publish --access public
+        working-directory: ./packages/instrumentation-mongodb
+        env:
+          # Build artifacts are already checked in on the release branch.
+          NPM_CONFIG_IGNORE_SCRIPTS: true
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
