@@ -1,0 +1,4 @@
+
+> @opentelemetry/instrumentation-aws-lambda@0.61.1 compile
+> tsc -p .
+

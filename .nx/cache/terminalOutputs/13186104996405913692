@@ -1,0 +1,4 @@
+
+> @opentelemetry/propagator-aws-xray@2.1.4 compile
+> tsc --build tsconfig.json tsconfig.esm.json tsconfig.esnext.json
+

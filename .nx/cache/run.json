@@ -1,0 +1,54 @@
+{
+  "run": {
+    "command": "nx run-many -t compile -p @opentelemetry/instrumentation-aws-lambda",
+    "startTime": "2026-01-22T13:07:26.101Z",
+    "endTime": "2026-01-22T13:07:26.156Z",
+    "inner": false
+  },
+  "tasks": [
+    {
+      "taskId": "@opentelemetry/propagator-aws-xray:compile",
+      "target": "compile",
+      "projectName": "@opentelemetry/propagator-aws-xray",
+      "hash": "13186104996405913692",
+      "startTime": "2026-01-22T13:07:26.133Z",
+      "endTime": "2026-01-22T13:07:26.137Z",
+      "params": "",
+      "cacheStatus": "local-cache-hit",
+      "status": 0
+    },
+    {
+      "taskId": "@opentelemetry/instrumentation-aws-lambda:version:update",
+      "target": "version:update",
+      "projectName": "@opentelemetry/instrumentation-aws-lambda",
+      "hash": "4737048137613948701",
+      "startTime": "2026-01-22T13:07:26.133Z",
+      "endTime": "2026-01-22T13:07:26.138Z",
+      "params": "",
+      "cacheStatus": "local-cache-hit",
+      "status": 0
+    },
+    {
+      "taskId": "@opentelemetry/propagator-aws-xray-lambda:compile",
+      "target": "compile",
+      "projectName": "@opentelemetry/propagator-aws-xray-lambda",
+      "hash": "17791500799498173499",
+      "startTime": "2026-01-22T13:07:26.141Z",
+      "endTime": "2026-01-22T13:07:26.145Z",
+      "params": "",
+      "cacheStatus": "local-cache-hit",
+      "status": 0
+    },
+    {
+      "taskId": "@opentelemetry/instrumentation-aws-lambda:compile",
+      "target": "compile",
+      "projectName": "@opentelemetry/instrumentation-aws-lambda",
+      "hash": "121693180100351443",
+      "startTime": "2026-01-22T13:07:26.148Z",
+      "endTime": "2026-01-22T13:07:26.153Z",
+      "params": "",
+      "cacheStatus": "local-cache-hit",
+      "status": 0
+    }
+  ]
+}

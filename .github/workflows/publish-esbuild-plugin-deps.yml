@@ -20,11 +20,11 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
       - run: npm install
-      - run: npm run compile
+      - run: npm run compile:with-dependencies
         working-directory: ./packages/instrumentation-aws-lambda
-      - run: npm run compile
+      - run: npm run compile:with-dependencies
         working-directory: ./packages/instrumentation-aws-sdk
-      - run: npm run compile
+      - run: npm run compile:with-dependencies
         working-directory: ./packages/instrumentation-mongodb
       # Rename packages after compile so dependencies resolve correctly
       - run: |
