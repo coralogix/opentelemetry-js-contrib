@@ -20,11 +20,23 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
       - run: npm install
-      - run: npm run compile:with-dependencies
+      - run: npm run compile
+        working-directory: ./packages/propagator-aws-xray
+      - run: npm run compile
+        working-directory: ./packages/propagator-aws-xray-lambda
+      - run: npm run version:update
         working-directory: ./packages/instrumentation-aws-lambda
-      - run: npm run compile:with-dependencies
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-lambda
+      - run: npm run compile
+        working-directory: ./packages/contrib-test-utils
+      - run: npm run version:update
         working-directory: ./packages/instrumentation-aws-sdk
-      - run: npm run compile:with-dependencies
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-sdk
+      - run: npm run version:update
+        working-directory: ./packages/instrumentation-mongodb
+      - run: npm run compile
         working-directory: ./packages/instrumentation-mongodb
       # Rename packages after compile so dependencies resolve correctly
       - run: |
