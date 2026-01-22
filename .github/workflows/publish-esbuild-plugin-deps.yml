@@ -33,21 +33,16 @@ jobs:
             )
           done
       - run: npm install
+      - run: npm run compile
       - run: npm publish --access public
         working-directory: ./packages/instrumentation-aws-lambda
         env:
-          # Build artifacts are already checked in on the release branch.
-          NPM_CONFIG_IGNORE_SCRIPTS: true
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
       - run: npm publish --access public
         working-directory: ./packages/instrumentation-aws-sdk
         env:
-          # Build artifacts are already checked in on the release branch.
-          NPM_CONFIG_IGNORE_SCRIPTS: true
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
       - run: npm publish --access public
         working-directory: ./packages/instrumentation-mongodb
         env:
-          # Build artifacts are already checked in on the release branch.
-          NPM_CONFIG_IGNORE_SCRIPTS: true
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
