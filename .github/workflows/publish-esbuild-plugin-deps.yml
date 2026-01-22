@@ -34,6 +34,11 @@ jobs:
           done
       - run: npm install
       - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-lambda
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-sdk
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-mongodb
       - run: npm publish --access public
         working-directory: ./packages/instrumentation-aws-lambda
         env:
