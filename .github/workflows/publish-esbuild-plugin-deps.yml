@@ -17,8 +17,16 @@ jobs:
           ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 20
           registry-url: https://registry.npmjs.org/
+      - run: npm install
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-lambda
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-aws-sdk
+      - run: npm run compile
+        working-directory: ./packages/instrumentation-mongodb
+      # Rename packages after compile so dependencies resolve correctly
       - run: |
           for pkg in packages/instrumentation-aws-lambda packages/instrumentation-aws-sdk packages/instrumentation-mongodb; do
             (
@@ -32,13 +40,6 @@ jobs:
               fi
             )
           done
-      - run: npm install
-      - run: npm run compile
-        working-directory: ./packages/instrumentation-aws-lambda
-      - run: npm run compile
-        working-directory: ./packages/instrumentation-aws-sdk
-      - run: npm run compile
-        working-directory: ./packages/instrumentation-mongodb
       - run: npm publish --access public
         working-directory: ./packages/instrumentation-aws-lambda
         env:
