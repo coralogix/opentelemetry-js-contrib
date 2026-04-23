@@ -76,6 +76,10 @@ type InstrumentationContext = {
   invocationParentContext: OtelContext;
 };
 
+type BeforeExecutionOptions = {
+  connectEarlyTriggerSpanToTriggerSpan?: boolean;
+};
+
 // Lambda's init phase is limited to 10 seconds. Otherwise the sandbox is
 // re-nitialized from scratch.
 export const lambdaMaxInitInMilliseconds = 10_000;
@@ -169,7 +173,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       ) {
         _onRequest();
 
-        return plugin._before_execution(event, context, requestIsColdStart).then(
+        return plugin._before_execution(event, context, requestIsColdStart, {
+          connectEarlyTriggerSpanToTriggerSpan: true,
+        }).then(
           instrCtx =>
             otelContext.with(
               trace.setSpan(
@@ -299,7 +305,8 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   private async _before_execution(
     event: any,
     context: Context,
-    requestIsColdStart: boolean
+    requestIsColdStart: boolean,
+    options: BeforeExecutionOptions = {}
   ): Promise<InstrumentationContext> {
     const upstreamContext = this._determineUpstreamContext(event, context);
 
@@ -324,7 +331,8 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       upstreamContext,
       triggerSpan,
       invocationParentContext,
-      invocationSpan
+      invocationSpan,
+      options
     );
 
     return {
@@ -368,15 +376,20 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     triggerParentContext: OtelContext,
     triggerSpan: Span | undefined,
     invocationParentContext: OtelContext,
-    invocationSpan: Span
+    invocationSpan: Span,
+    options: BeforeExecutionOptions = {}
   ) {
     try {
       if (
         triggerSpan &&
         (triggerSpan as unknown as ReadableSpan).kind !== undefined
       ) {
+        const earlyTriggerParentContext =
+          options.connectEarlyTriggerSpanToTriggerSpan
+            ? trace.setSpan(triggerParentContext, triggerSpan)
+            : triggerParentContext;
         const earlyTrigger = this._createEarlySpan(
-          triggerParentContext,
+          earlyTriggerParentContext,
           triggerSpan as unknown as ReadableSpan
         );
         earlyTrigger.end();
