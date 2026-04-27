@@ -1,10 +1,20 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const {
-  diag, trace, DiagConsoleLogger, DiagLogLevel,
+  diag,
+  trace,
+  DiagConsoleLogger,
+  DiagLogLevel,
 } = require('@opentelemetry/api');
 const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
-const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
+const {
+  getNodeAutoInstrumentations,
+} = require('@opentelemetry/auto-instrumentations-node');
 const { CollectorTraceExporter } = require('@opentelemetry/exporter-collector');
 const { SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
@@ -17,15 +27,16 @@ module.exports = () => {
     serviceName: 'basic-service',
   });
 
-  const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+  const provider = new NodeTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
   provider.register();
 
   registerInstrumentations({
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-http': {
-          applyCustomAttributesOnSpan: (span) => {
+          applyCustomAttributesOnSpan: span => {
             span.setAttribute('foo2', 'bar2');
           },
         },

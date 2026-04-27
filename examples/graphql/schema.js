@@ -1,23 +1,33 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* eslint-disable no-unused-vars */
+
 'use strict';
 
 const https = require('https');
 const graphql = require('graphql');
 
-const url1 = 'https://raw.githubusercontent.com/open-telemetry/opentelemetry-js/main/package.json';
+const url1 =
+  'https://raw.githubusercontent.com/open-telemetry/opentelemetry-js/main/package.json';
 
 function getData(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
-      let data = '';
-      response.on('data', (chunk) => {
-        data += chunk;
+    https
+      .get(url, response => {
+        let data = '';
+        response.on('data', chunk => {
+          data += chunk;
+        });
+        response.on('end', () => {
+          resolve(JSON.parse(data));
+        });
+      })
+      .on('error', err => {
+        reject(err);
       });
-      response.on('end', () => {
-        resolve(JSON.parse(data));
-      });
-    }).on('error', (err) => {
-      reject(err);
-    });
   });
 }
 
@@ -27,7 +37,7 @@ const books = [];
 function addBook(name, authorIds) {
   let authorIdsLocal = authorIds;
   if (typeof authorIdsLocal === 'string') {
-    authorIdsLocal = authorIdsLocal.split(',').map((id) => parseInt(id, 10));
+    authorIdsLocal = authorIdsLocal.split(',').map(id => parseInt(id, 10));
   }
   const id = books.length;
   books.push({
@@ -90,7 +100,7 @@ module.exports = function buildSchema() {
         type: graphql.GraphQLString,
         resolve(_obj, _args) {
           return new Promise((resolve, reject) => {
-            getData(url1).then((response) => {
+            getData(url1).then(response => {
               resolve(response.description);
             }, reject);
           });
@@ -139,7 +149,7 @@ module.exports = function buildSchema() {
       authors: {
         type: new graphql.GraphQLList(Author),
         resolve(obj, _args) {
-          return obj.authorIds.map((id) => authors[id]);
+          return obj.authorIds.map(id => authors[id]);
         },
       },
     },
@@ -188,7 +198,9 @@ module.exports = function buildSchema() {
         type: Book,
         args: {
           name: { type: new graphql.GraphQLNonNull(graphql.GraphQLString) },
-          authorIds: { type: new graphql.GraphQLNonNull(graphql.GraphQLString) },
+          authorIds: {
+            type: new graphql.GraphQLNonNull(graphql.GraphQLString),
+          },
         },
         resolve(obj, args, _context) {
           return Promise.resolve(addBook(args.name, args.authorIds));

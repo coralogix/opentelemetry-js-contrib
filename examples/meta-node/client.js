@@ -1,6 +1,10 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
-// eslint-disable-next-line import/order
 const tracer = require('./tracer')('example-express-client');
 const api = require('@opentelemetry/api');
 const axios = require('axios').default;
@@ -19,8 +23,12 @@ function makeRequest() {
       span.setStatus({ code: api.SpanStatusCode.ERROR, message: e.message });
     }
     span.end();
-    console.log('Sleeping 5 seconds before shutdown to ensure all records are flushed.');
-    setTimeout(() => { console.log('Completed.'); }, 5000);
+    console.log(
+      'Sleeping 5 seconds before shutdown to ensure all records are flushed.'
+    );
+    setTimeout(() => {
+      console.log('Completed.');
+    }, 5000);
   });
 }
 

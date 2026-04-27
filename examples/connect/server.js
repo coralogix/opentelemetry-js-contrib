@@ -1,6 +1,10 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
-// eslint-disable-next-line
 const tracing = require('./tracing')('example-connect-server');
 
 // Require in rest of modules
@@ -11,7 +15,6 @@ const axios = require('axios');
 const app = connect();
 const PORT = 8080;
 
-// eslint-disable-next-line prefer-arrow-callback
 app.use(function middleware1(req, res, next) {
   next();
 });
@@ -21,7 +24,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/run_test', async (req, res) => {
-  const result = await axios.get('https://raw.githubusercontent.com/open-telemetry/opentelemetry-js/main/package.json');
+  const result = await axios.get(
+    'https://raw.githubusercontent.com/open-telemetry/opentelemetry-js/main/package.json'
+  );
   tracing.log('sending response');
   res.end(`OK ${result.data.version}`);
 

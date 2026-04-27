@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const url = require('url');
@@ -32,13 +37,13 @@ function makeRequest(query) {
         'Content-Type': 'application/json',
       },
     };
-    const req = http.request(options, (res) => {
+    const req = http.request(options, res => {
       const data = [];
-      res.on('data', (chunk) => data.push(chunk));
+      res.on('data', chunk => data.push(chunk));
       res.on('end', () => {
         resolve(data.toString());
       });
-      res.on('error', (err) => {
+      res.on('error', err => {
         reject(err);
       });
     });

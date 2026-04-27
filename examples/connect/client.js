@@ -1,6 +1,10 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
-// eslint-disable-next-line import/order
 const tracing = require('./tracing')('example-connect-client');
 
 const { tracer } = tracing;

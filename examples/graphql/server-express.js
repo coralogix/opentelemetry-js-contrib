@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 require('./tracer');
@@ -9,10 +14,13 @@ const buildSchema = require('./schema');
 const schema = buildSchema();
 
 const app = express();
-app.use('/graphql', graphqlHTTP({
-  schema,
-  graphiql: true,
-}));
+app.use(
+  '/graphql',
+  graphqlHTTP({
+    schema,
+    graphiql: true,
+  })
+);
 
 app.listen(4000);
 

@@ -1,3 +1,0 @@
-express:
-  - versions: "^4.16.2"
-    commands: npm run test

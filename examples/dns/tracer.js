@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const opentelemetry = require('@opentelemetry/api');
@@ -10,9 +15,7 @@ const { registerInstrumentations } = require('@opentelemetry/instrumentation');
 
 const EXPORTER = process.env.EXPORTER || '';
 
-module.exports = (serviceName) => {
-  const provider = new NodeTracerProvider();
-
+module.exports = serviceName => {
   let exporter;
   if (EXPORTER.toLowerCase().startsWith('z')) {
     exporter = new ZipkinExporter({
@@ -24,7 +27,9 @@ module.exports = (serviceName) => {
     });
   }
 
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+  const provider = new NodeTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
 
   // Initialize the OpenTelemetry APIs to use the NodeTracerProvider bindings
   provider.register();

@@ -1,9 +1,16 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const { HostMetrics } = require('@opentelemetry/host-metrics');
 // const { PrometheusExporter } = require('@opentelemetry/exporter-prometheus');
 const { MeterProvider } = require('@opentelemetry/sdk-metrics-base');
-const { CollectorMetricExporter } = require('@opentelemetry/exporter-collector');
+const {
+  CollectorMetricExporter,
+} = require('@opentelemetry/exporter-collector');
 
 const exporter = new CollectorMetricExporter({
   headers: {},
@@ -26,10 +33,13 @@ const meterProvider = new MeterProvider({
   interval: 2000,
 });
 
-const hostMetrics = new HostMetrics({ meterProvider, name: 'example-host-metrics' });
+const hostMetrics = new HostMetrics({
+  meterProvider,
+  name: 'example-host-metrics',
+});
 hostMetrics.start();
 
 // keep running
 (function wait() {
   setTimeout(wait, 1000);
-}());
+})();

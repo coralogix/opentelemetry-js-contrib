@@ -1,21 +1,32 @@
-import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+'use strict';
+
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { ZoneContextManager } from '@opentelemetry/context-zone';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-otlp-http';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { B3Propagator } from '@opentelemetry/propagator-b3';
 import { getWebAutoInstrumentations } from '@opentelemetry/auto-instrumentations-web';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
-import { Resource } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 const providerWithZone = new WebTracerProvider({
-  resource: new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'web-service-meta',
+  resource: resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: 'web-service-meta',
   }),
+  spanProcessors: [
+    new SimpleSpanProcessor(new ConsoleSpanExporter()),
+    new SimpleSpanProcessor(new OTLPTraceExporter()),
+  ],
 });
-
-providerWithZone.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
-providerWithZone.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter()));
 
 providerWithZone.register({
   contextManager: new ZoneContextManager(),
@@ -24,9 +35,7 @@ providerWithZone.register({
 const instrumentations = getWebAutoInstrumentations({
   '@opentelemetry/instrumentation-xml-http-request': {
     ignoreUrls: [/localhost/],
-    propagateTraceHeaderCorsUrls: [
-      'http://localhost:8090',
-    ],
+    propagateTraceHeaderCorsUrls: ['http://localhost:8090'],
   },
 });
 
@@ -38,7 +47,7 @@ registerInstrumentations({
 let lastButtonId = 0;
 
 function btnAddClick() {
-  lastButtonId++;
+  lastButtonId += 1;
   const btn = document.createElement('button');
   // for easier testing of element xpath
   let navigate = false;
@@ -62,8 +71,16 @@ function prepareClickEvents() {
 
 function onClick(navigate) {
   if (navigate) {
-    history.pushState({ test: 'testing' }, '', `${location.pathname}`);
-    history.pushState({ test: 'testing' }, '', `${location.pathname}#foo=bar1`);
+    window.history.pushState(
+      { test: 'testing' },
+      '',
+      `${window.location.pathname}`
+    );
+    window.history.pushState(
+      { test: 'testing' },
+      '',
+      `${window.location.pathname}#foo=bar1`
+    );
   }
   getData('https://httpbin.org/get?a=1').then(() => {
     getData('https://httpbin.org/get?a=1').then(() => {
@@ -76,14 +93,14 @@ function onClick(navigate) {
   });
 }
 
-function getData(url, resolve) {
-  return new Promise(async (resolve, reject) => {
+function getData(url) {
+  return new Promise(resolve => {
     const req = new XMLHttpRequest();
     req.open('GET', url, true);
     req.setRequestHeader('Content-Type', 'application/json');
     req.setRequestHeader('Accept', 'application/json');
     req.send();
-    req.onload = function () {
+    req.onload = function onLoad() {
       resolve();
     };
   });

@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const opentelemetry = require('@opentelemetry/api');
@@ -6,13 +11,15 @@ const { diag, DiagConsoleLogger, DiagLogLevel } = opentelemetry;
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
 const { Resource } = require('@opentelemetry/resources');
-const { ResourceAttributes: SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+const { ATTR_SERVICE_NAME } = require('@opentelemetry/semantic-conventions');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
 const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
 const { SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
 const { CollectorTraceExporter } = require('@opentelemetry/exporter-collector');
 
-const { ConnectInstrumentation } = require('@opentelemetry/instrumentation-connect');
+const {
+  ConnectInstrumentation,
+} = require('@opentelemetry/instrumentation-connect');
 const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
 
 function log() {
@@ -21,11 +28,13 @@ function log() {
   console.log.apply(this, args);
 }
 
-module.exports = (serviceName) => {
+module.exports = serviceName => {
+  const exporter = new CollectorTraceExporter();
   const provider = new NodeTracerProvider({
     resource: new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
+      [ATTR_SERVICE_NAME]: serviceName,
     }),
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
   const connectInstrumentation = new ConnectInstrumentation();
   registerInstrumentations({
@@ -36,10 +45,6 @@ module.exports = (serviceName) => {
       connectInstrumentation,
     ],
   });
-
-  const exporter = new CollectorTraceExporter();
-
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
 
   // Initialize the OpenTelemetry APIs to use the NodeTracerProvider bindings
   provider.register({});

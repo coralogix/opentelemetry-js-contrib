@@ -1,9 +1,13 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const api = require('@opentelemetry/api');
 require('./tracer')('example-hapi-server');
 
-// eslint-disable-next-line
 const Hapi = require('@hapi/hapi');
 
 const PORT = 8081;
@@ -28,27 +32,26 @@ const BlogPostPlugin = {
         method: 'GET',
         path: '/post/{id}',
         handler: showNewPost,
-      }]);
+      },
+    ]);
   },
 };
 
 async function setUp() {
-  await server.register(
-    { plugin: BlogPostPlugin },
-  );
+  await server.register({ plugin: BlogPostPlugin });
 
-  server.route(
-    {
-      method: 'GET',
-      path: '/run_test',
-      handler: runTest,
-    },
-  );
+  server.route({
+    method: 'GET',
+    path: '/run_test',
+    handler: runTest,
+  });
 
   server.ext('onRequest', async (request, h) => {
     console.log('No-op Hapi lifecycle extension method');
     const syntheticDelay = 50;
-    await new Promise((r) => setTimeout(r, syntheticDelay));
+    await new Promise(r => {
+      setTimeout(r, syntheticDelay);
+    });
     return h.continue;
   });
 
@@ -59,7 +62,7 @@ async function setUp() {
 
 /**
  *  Blog Post functions: list, add, or show posts
-*/
+ */
 const posts = ['post 0', 'post 1', 'post 2'];
 
 function addPost(_, h) {
@@ -77,7 +80,9 @@ async function showNewPost(request) {
   const post = posts[id];
   if (!post) throw new Error('Invalid post id');
   const syntheticDelay = 200;
-  await new Promise((r) => setTimeout(r, syntheticDelay));
+  await new Promise(r => {
+    setTimeout(r, syntheticDelay);
+  });
   return post;
 }
 
@@ -91,7 +96,7 @@ function runTest(_, h) {
 }
 
 setUp();
-process.on('unhandledRejection', (err) => {
+process.on('unhandledRejection', err => {
   console.log(err);
   process.exit(1);
 });

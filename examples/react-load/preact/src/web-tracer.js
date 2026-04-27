@@ -1,18 +1,31 @@
-import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+'use strict';
+
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { BaseOpenTelemetryComponent } from '@opentelemetry/plugin-react-load';
 import { ZoneContextManager } from '@opentelemetry/context-zone';
-import { CollectorTraceExporter } from '@opentelemetry/exporter-collector';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 
-export default (serviceName) => {
-  const provider = new WebTracerProvider();
-
-  const exporter = new CollectorTraceExporter({
-    url: 'http://localhost:55678/v1/trace',
+export default serviceName => {
+  diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
+  const exporter = new OTLPTraceExporter({
+    url: 'http://localhost:4318/v1/traces',
   });
-
-  provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
-  provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+  const provider = new WebTracerProvider({
+    spanProcessors: [
+      new SimpleSpanProcessor(new ConsoleSpanExporter()),
+      new SimpleSpanProcessor(exporter),
+    ],
+  });
 
   provider.register({
     contextManager: new ZoneContextManager(),
@@ -20,8 +33,7 @@ export default (serviceName) => {
 
   const tracer = provider.getTracer(serviceName);
 
-  BaseOpenTelemetryComponent.setTracer(serviceName)
-  BaseOpenTelemetryComponent.setLogger(provider.logger)
+  BaseOpenTelemetryComponent.setTracer(serviceName);
 
   return tracer;
-}
+};

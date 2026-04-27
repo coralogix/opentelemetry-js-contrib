@@ -1,8 +1,12 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const api = require('@opentelemetry/api');
 const tracer = require('./tracer')('example-dns');
-// eslint-disable-next-line import/order
 const dns = require('dns').promises;
 
 /** A function which makes a dns lookup and handles response. */
@@ -28,8 +32,12 @@ function makeLookup() {
   // The process must live for at least the interval past any traces that
   // must be exported, or some risk being lost if they are recorded after the
   // last export.
-  console.log('Sleeping 5 seconds before shutdown to ensure all records are flushed.');
-  setTimeout(() => { console.log('Completed.'); }, 5000);
+  console.log(
+    'Sleeping 5 seconds before shutdown to ensure all records are flushed.'
+  );
+  setTimeout(() => {
+    console.log('Completed.');
+  }, 5000);
 }
 
 makeLookup();

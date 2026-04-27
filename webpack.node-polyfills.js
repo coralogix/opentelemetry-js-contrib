@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 module.exports = {
   // Enable the assert library polyfill because that is used in tests
   assert: true,
@@ -48,5 +53,5 @@ module.exports = {
   url: false,
   util: false,
   vm: false,
-  zlib: false
+  zlib: false,
 };

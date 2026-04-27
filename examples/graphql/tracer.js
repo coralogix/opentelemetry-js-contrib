@@ -1,23 +1,37 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
-const { GraphQLInstrumentation } = require('@opentelemetry/instrumentation-graphql');
-const { ConsoleSpanExporter, SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
+const {
+  GraphQLInstrumentation,
+} = require('@opentelemetry/instrumentation-graphql');
+const {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} = require('@opentelemetry/sdk-trace-base');
 const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-otlp-http');
 const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
-const { ExpressInstrumentation } = require('@opentelemetry/instrumentation-express');
+const {
+  ExpressInstrumentation,
+} = require('@opentelemetry/instrumentation-express');
 const { Resource } = require('@opentelemetry/resources');
-const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+const { ATTR_SERVICE_NAME } = require('@opentelemetry/semantic-conventions');
 
 const provider = new NodeTracerProvider({
   resource: new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'graphql-service',
+    [ATTR_SERVICE_NAME]: 'graphql-service',
   }),
+  spanProcessors: [
+    new SimpleSpanProcessor(new OTLPTraceExporter()),
+    new SimpleSpanProcessor(new ConsoleSpanExporter()),
+  ],
 });
 
-provider.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter()));
-provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
 provider.register();
 
 registerInstrumentations({

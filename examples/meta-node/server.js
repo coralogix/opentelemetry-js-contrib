@@ -1,6 +1,10 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
-// eslint-disable-next-line
 require('./tracer')('example-meta-node');
 
 // Require in rest of modules
@@ -35,16 +39,18 @@ async function setupRoutes() {
   app.use(express.json());
 
   app.get('/run_test', async (req, res) => {
-    const createdCat = await axios.post(`http://localhost:${PORT}/cats`, {
-      name: 'Tom',
-      friends: [
-        'Jerry',
-      ],
-    }, {
-      headers: {
-        Authorization: 'secret_token',
+    const createdCat = await axios.post(
+      `http://localhost:${PORT}/cats`,
+      {
+        name: 'Tom',
+        friends: ['Jerry'],
       },
-    });
+      {
+        headers: {
+          Authorization: 'secret_token',
+        },
+      }
+    );
 
     return res.status(201).send(createdCat.data);
   });

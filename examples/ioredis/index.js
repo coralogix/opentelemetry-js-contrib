@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 // Require tracer before any other modules
@@ -16,8 +21,12 @@ async function main() {
   // The process must live for at least the interval past any traces that
   // must be exported, or some risk being lost if they are recorded after the
   // last export.
-  console.log('Sleeping 5 seconds before shutdown to ensure all records are flushed.');
-  setTimeout(() => { console.log('Completed.'); }, 5000);
+  console.log(
+    'Sleeping 5 seconds before shutdown to ensure all records are flushed.'
+  );
+  setTimeout(() => {
+    console.log('Completed.');
+  }, 5000);
 }
 
 main();

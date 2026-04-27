@@ -1,3 +1,8 @@
+/*
+ * Copyright The OpenTelemetry Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 'use strict';
 
 const { diag, DiagConsoleLogger, DiagLogLevel } = require('@opentelemetry/api');
@@ -6,16 +11,22 @@ const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
 const { NetInstrumentation } = require('@opentelemetry/instrumentation-net');
 const { DnsInstrumentation } = require('@opentelemetry/instrumentation-dns');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
-const { SimpleSpanProcessor, ConsoleSpanExporter } = require('@opentelemetry/sdk-trace-base');
+const {
+  SimpleSpanProcessor,
+  ConsoleSpanExporter,
+} = require('@opentelemetry/sdk-trace-base');
 const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
 
-const provider = new NodeTracerProvider();
-
-provider.addSpanProcessor(new SimpleSpanProcessor(new JaegerExporter({
-  serviceName: 'http-client',
-})));
-
-provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+const provider = new NodeTracerProvider({
+  spanProcessors: [
+    new SimpleSpanProcessor(
+      new JaegerExporter({
+        serviceName: 'http-client',
+      })
+    ),
+    new SimpleSpanProcessor(new ConsoleSpanExporter()),
+  ],
+});
 
 provider.register();
 
@@ -38,14 +49,20 @@ require('dns');
 const https = require('https');
 const http = require('http');
 
-http.get('http://opentelemetry.io/', () => {}).on('error', (e) => {
-  console.error(e);
-});
+http
+  .get('http://opentelemetry.io/', () => {})
+  .on('error', e => {
+    console.error(e);
+  });
 
-https.get('https://opentelemetry.io/', () => {}).on('error', (e) => {
-  console.error(e);
-});
+https
+  .get('https://opentelemetry.io/', () => {})
+  .on('error', e => {
+    console.error(e);
+  });
 
-https.get('https://opentelemetry.io/', { ca: [] }, () => {}).on('error', (e) => {
-  console.error(e);
-});
+https
+  .get('https://opentelemetry.io/', { ca: [] }, () => {})
+  .on('error', e => {
+    console.error(e);
+  });
