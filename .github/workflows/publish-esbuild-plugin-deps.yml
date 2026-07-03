@@ -55,6 +55,7 @@ jobs:
             (
               cd "$pkg"
               sed -i -e 's/"name": "@opentelemetry\//"name": "@coralogix\//g' package.json
+              npm pkg set repository.url=https://github.com/coralogix/opentelemetry-js-contrib.git
               INSTR_SECTION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log('dependencies'); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log('peerDependencies');")
               INSTR_VERSION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log(p.dependencies['@opentelemetry/instrumentation']); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log(p.peerDependencies['@opentelemetry/instrumentation']);")
               if [ -n "$INSTR_SECTION" ] && [ -n "$INSTR_VERSION" ]; then
