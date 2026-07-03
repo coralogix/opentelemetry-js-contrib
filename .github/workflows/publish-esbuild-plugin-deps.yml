@@ -8,18 +8,29 @@ on:
         required: false
         default: coralogix-autoinstrumentation
 
+permissions:
+  contents: read
+
 jobs:
   publish-npm:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
+    environment: npm-publish-environment
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ inputs.ref }}
-      - uses: actions/setup-node@v3
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org/
-      - run: npm install
+          # Require npm 11.5.1 or later for https://docs.npmjs.com/trusted-publishers.
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          # Disable caching in release workflows (https://docs.zizmor.sh/audits/#cache-poisoning).
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
       - run: npm run compile
         working-directory: ./packages/propagator-aws-xray
       - run: npm run compile
@@ -38,13 +49,12 @@ jobs:
         working-directory: ./packages/instrumentation-mongodb
       - run: npm run compile
         working-directory: ./packages/instrumentation-mongodb
-      # Rename packages after compile so dependencies resolve correctly
+      # Rename packages after compile so dependencies resolve correctly.
       - run: |
           for pkg in packages/instrumentation-aws-lambda packages/instrumentation-aws-sdk packages/instrumentation-mongodb; do
             (
               cd "$pkg"
               sed -i -e 's/"name": "@opentelemetry\//"name": "@coralogix\//g' package.json
-              # Keep import name but resolve to the Coralogix fork at the same version range.
               INSTR_SECTION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log('dependencies'); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log('peerDependencies');")
               INSTR_VERSION=$(node -e "const p=require('./package.json'); if (p.dependencies && p.dependencies['@opentelemetry/instrumentation']) console.log(p.dependencies['@opentelemetry/instrumentation']); else if (p.peerDependencies && p.peerDependencies['@opentelemetry/instrumentation']) console.log(p.peerDependencies['@opentelemetry/instrumentation']);")
               if [ -n "$INSTR_SECTION" ] && [ -n "$INSTR_VERSION" ]; then
@@ -52,15 +62,9 @@ jobs:
               fi
             )
           done
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
         working-directory: ./packages/instrumentation-aws-lambda
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
         working-directory: ./packages/instrumentation-aws-sdk
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
         working-directory: ./packages/instrumentation-mongodb
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
