@@ -7,10 +7,9 @@ import { SpanStatusCode, context } from '@opentelemetry/api';
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+  TracerProvider,
+} from '@opentelemetry/sdk-trace';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
-import { SemconvStability } from '@opentelemetry/instrumentation';
 import * as assert from 'assert';
 import * as tls from 'tls';
 import { NetInstrumentation } from '../src';
@@ -23,13 +22,9 @@ import {
   PORT,
 } from './utils';
 
-// By default tests run with both old and stable semconv.
-process.env.OTEL_SEMCONV_STABILITY_OPT_IN = 'http/dup';
-const DEFAULT_NET_SEMCONV_STABILITY = SemconvStability.DUPLICATE;
-
 const memoryExporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider({
-  spanProcessors: [new SimpleSpanProcessor(memoryExporter)],
+const provider = new TracerProvider({
+  spanProcessors: [new SimpleSpanProcessor({ exporter: memoryExporter })],
 });
 
 function getTLSSpans() {
@@ -89,11 +84,7 @@ describe('NetInstrumentation', () => {
           },
         },
         () => {
-          assertTLSSpan(
-            getTLSSpans(),
-            tlsSocket,
-            DEFAULT_NET_SEMCONV_STABILITY
-          );
+          assertTLSSpan(getTLSSpans(), tlsSocket);
           done();
         }
       );
@@ -110,7 +101,7 @@ describe('NetInstrumentation', () => {
         c.end();
       });
       tlsSocket.once('end', () => {
-        assertTLSSpan(getTLSSpans(), tlsSocket, DEFAULT_NET_SEMCONV_STABILITY);
+        assertTLSSpan(getTLSSpans(), tlsSocket);
         done();
       });
     });
@@ -126,11 +117,7 @@ describe('NetInstrumentation', () => {
           },
         },
         () => {
-          assertTLSSpan(
-            getTLSSpans(),
-            tlsSocket,
-            DEFAULT_NET_SEMCONV_STABILITY
-          );
+          assertTLSSpan(getTLSSpans(), tlsSocket);
           done();
         }
       );

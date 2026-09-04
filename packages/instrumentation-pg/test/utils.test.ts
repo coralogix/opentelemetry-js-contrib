@@ -5,15 +5,12 @@
 
 import { context, trace } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { InstrumentationConfig } from '@opentelemetry/instrumentation';
 import {
-  InstrumentationConfig,
-  SemconvStability,
-} from '@opentelemetry/instrumentation';
-import {
-  BasicTracerProvider,
+  TracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 import * as assert from 'assert';
 import * as pg from 'pg';
 import { PgInstrumentationConfig } from '../src';
@@ -41,8 +38,8 @@ const getLatestSpan = () => {
 describe('utils.ts', () => {
   const client = new pg.Client(CONFIG) as PgClientExtended;
   let contextManager: AsyncLocalStorageContextManager;
-  const provider = new BasicTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(memoryExporter)],
+  const provider = new TracerProvider({
+    spanProcessors: [new SimpleSpanProcessor({ exporter: memoryExporter })],
   });
   const tracer = provider.getTracer('external');
 
@@ -176,7 +173,6 @@ describe('utils.ts', () => {
         client,
         tracer,
         instrumentationConfig,
-        SemconvStability.STABLE,
         queryConfig
       );
       querySpan.end();
@@ -196,7 +192,6 @@ describe('utils.ts', () => {
         client,
         tracer,
         extPluginConfig,
-        SemconvStability.STABLE,
         queryConfig
       );
       querySpan.end();
@@ -211,60 +206,42 @@ describe('utils.ts', () => {
   describe('.getSemanticAttributesFromConnection()', () => {
     it('should set port attribute to undefined when port is not an integer', () => {
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: Infinity,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: Infinity,
+        })[ATTR_SERVER_PORT],
         undefined
       );
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: -Infinity,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: -Infinity,
+        })[ATTR_SERVER_PORT],
         undefined
       );
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: NaN,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: NaN,
+        })[ATTR_SERVER_PORT],
         undefined
       );
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: 1.234,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: 1.234,
+        })[ATTR_SERVER_PORT],
         undefined
       );
     });
 
     it('should set port attribute when port is an integer', () => {
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: 1234,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: 1234,
+        })[ATTR_SERVER_PORT],
         1234
       );
       assert.strictEqual(
-        utils.getSemanticAttributesFromConnection(
-          {
-            port: Number.MAX_VALUE,
-          },
-          SemconvStability.STABLE
-        )[ATTR_SERVER_PORT],
+        utils.getSemanticAttributesFromConnection({
+          port: Number.MAX_VALUE,
+        })[ATTR_SERVER_PORT],
         Number.MAX_VALUE
       );
     });

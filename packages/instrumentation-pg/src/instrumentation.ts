@@ -8,8 +8,6 @@ import {
   InstrumentationNodeModuleDefinition,
   safeExecuteInTheMiddle,
   InstrumentationNodeModuleFile,
-  SemconvStability,
-  semconvStabilityFromStr,
 } from '@opentelemetry/instrumentation';
 import {
   context,
@@ -58,9 +56,10 @@ import {
 } from '@opentelemetry/semantic-conventions';
 import {
   METRIC_DB_CLIENT_CONNECTION_COUNT,
+  METRIC_DB_CLIENT_CONNECTION_MAX,
   METRIC_DB_CLIENT_CONNECTION_PENDING_REQUESTS,
-  ATTR_DB_SYSTEM,
-  DB_SYSTEM_VALUE_POSTGRESQL,
+  DB_SYSTEM_NAME_VALUE_POSTGRESQL,
+  ATTR_DB_CLIENT_CONNECTION_POOL_NAME,
 } from './semconv';
 
 function extractModuleExports(module: any) {
@@ -76,7 +75,12 @@ const INTERNAL_SET_QUERY = Symbol(
 export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConfig> {
   declare private _operationDuration: Histogram;
   declare private _connectionsCount: UpDownCounter;
+  declare private _connectionMax: UpDownCounter;
   declare private _connectionPendingRequests: UpDownCounter;
+  private _poolMaxValues = new Map<
+    PgPoolExtended,
+    { value: number; attributes: Attributes }
+  >();
   // Pool events connect, acquire, release and remove can be called
   // multiple times without changing the values of total, idle and waiting
   // connections. The _connectionsCounter is used to keep track of latest
@@ -87,17 +91,20 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
     idle: 0,
     pending: 0,
   };
-  private _semconvStability: SemconvStability;
 
   constructor(config: PgInstrumentationConfig = {}) {
     super(PACKAGE_NAME, PACKAGE_VERSION, config);
-    this._semconvStability = semconvStabilityFromStr(
-      'database',
-      process.env.OTEL_SEMCONV_STABILITY_OPT_IN
-    );
   }
 
   override _updateMetricInstruments() {
+    // Clear the values from the previous MeterProvider before replacing the
+    // instrument. Active pools are replayed to the new provider below.
+    if (this._connectionMax && this._poolMaxValues) {
+      for (const { value, attributes } of this._poolMaxValues.values()) {
+        this._connectionMax.add(-value, attributes);
+      }
+    }
+
     this._operationDuration = this.meter.createHistogram(
       METRIC_DB_CLIENT_OPERATION_DURATION,
       {
@@ -133,6 +140,19 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
         unit: '{connection}',
       }
     );
+    this._connectionMax = this.meter.createUpDownCounter(
+      METRIC_DB_CLIENT_CONNECTION_MAX,
+      {
+        description: 'The maximum number of open connections allowed.',
+        unit: '{connection}',
+      }
+    );
+
+    if (this._poolMaxValues) {
+      for (const { value, attributes } of this._poolMaxValues.values()) {
+        this._connectionMax.add(value, attributes);
+      }
+    }
   }
 
   protected init() {
@@ -179,17 +199,24 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
         if (isWrapped(moduleExports.prototype.connect)) {
           this._unwrap(moduleExports.prototype, 'connect');
         }
+        if (isWrapped(moduleExports.prototype.end)) {
+          this._unwrap(moduleExports.prototype, 'end');
+        }
         this._wrap(
           moduleExports.prototype,
           'connect',
           this._getPoolConnectPatch() as any
         );
+        this._wrap(moduleExports.prototype, 'end', this._getPoolEndPatch());
         return moduleExports;
       },
       (module: any) => {
         const moduleExports = extractModuleExports(module);
         if (isWrapped(moduleExports.prototype.connect)) {
           this._unwrap(moduleExports.prototype, 'connect');
+        }
+        if (isWrapped(moduleExports.prototype.end)) {
+          this._unwrap(moduleExports.prototype, 'end');
         }
       }
     );
@@ -256,10 +283,7 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
 
         const span = plugin.tracer.startSpan(SpanNames.CONNECT, {
           kind: SpanKind.CLIENT,
-          attributes: utils.getSemanticAttributesFromConnection(
-            this,
-            plugin._semconvStability
-          ),
+          attributes: utils.getSemanticAttributesFromConnection(this),
         });
 
         if (callback) {
@@ -291,12 +315,7 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
       ATTR_SERVER_ADDRESS,
       ATTR_DB_OPERATION_NAME,
     ];
-    if (this._semconvStability & SemconvStability.OLD) {
-      keysToCopy.push(ATTR_DB_SYSTEM);
-    }
-    if (this._semconvStability & SemconvStability.STABLE) {
-      keysToCopy.push(ATTR_DB_SYSTEM_NAME);
-    }
+    keysToCopy.push(ATTR_DB_SYSTEM_NAME);
 
     keysToCopy.forEach(key => {
       if (key in attributes) {
@@ -360,7 +379,7 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
             : undefined;
 
         const attributes: Attributes = {
-          [ATTR_DB_SYSTEM]: DB_SYSTEM_VALUE_POSTGRESQL,
+          [ATTR_DB_SYSTEM_NAME]: DB_SYSTEM_NAME_VALUE_POSTGRESQL,
           [ATTR_DB_NAMESPACE]: this.database,
           [ATTR_SERVER_PORT]: this.connectionParameters.port,
           [ATTR_SERVER_ADDRESS]: this.connectionParameters.host,
@@ -381,7 +400,6 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
           this,
           plugin.tracer,
           instrumentationConfig,
-          plugin._semconvStability,
           queryConfig
         );
 
@@ -390,10 +408,13 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
         if (instrumentationConfig.addSqlCommenterCommentToQueries) {
           if (firstArgIsString) {
             args[0] = addSqlCommenterComment(span, arg0);
-          } else if (firstArgIsQueryObjectWithText && !('name' in arg0)) {
-            // In the case of a query object, we need to ensure there's no name field
-            // as this indicates a prepared query, where the comment would remain the same
-            // for every invocation and contain an outdated trace context.
+          } else if (
+            firstArgIsQueryObjectWithText &&
+            (!('name' in arg0) || arg0.name === undefined)
+          ) {
+            // In the case of a query object, only skip when there is an actual
+            // prepared statement name. The comment would remain the same for
+            // every invocation and contain an outdated trace context.
             args[0] = {
               ...arg0,
               text: addSqlCommenterComment(span, arg0.text),
@@ -565,6 +586,7 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
   }
 
   private _setPoolConnectEventListeners(pgPool: PgPoolExtended) {
+    this._recordPoolMax(pgPool);
     if (pgPool[EVENT_LISTENERS_SET]) return;
     const poolName = utils.getPoolName(pgPool.options);
 
@@ -610,6 +632,25 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
     pgPool[EVENT_LISTENERS_SET] = true;
   }
 
+  private _recordPoolMax(pgPool: PgPoolExtended) {
+    if (this._poolMaxValues.has(pgPool)) return;
+
+    const attributes: Attributes = {
+      [ATTR_DB_CLIENT_CONNECTION_POOL_NAME]: utils.getPoolName(pgPool.options),
+    };
+    const value = pgPool.options.max;
+    this._poolMaxValues.set(pgPool, { value, attributes });
+    this._connectionMax.add(value, attributes);
+  }
+
+  private _removePoolMax(pgPool: PgPoolExtended) {
+    const state = this._poolMaxValues.get(pgPool);
+    if (!state) return;
+
+    this._connectionMax.add(-state.value, state.attributes);
+    this._poolMaxValues.delete(pgPool);
+  }
+
   private _getPoolConnectPatch() {
     const plugin = this;
     return (originalConnect: typeof pgPoolTypes.prototype.connect) => {
@@ -631,8 +672,7 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
         const span = plugin.tracer.startSpan(SpanNames.POOL_CONNECT, {
           kind: SpanKind.CLIENT,
           attributes: utils.getSemanticAttributesFromPoolConnection(
-            this.options,
-            plugin._semconvStability
+            this.options
           ),
         });
 
@@ -656,6 +696,25 @@ export class PgInstrumentation extends InstrumentationBase<PgInstrumentationConf
         );
 
         return handleConnectResult(span, connectResult);
+      };
+    };
+  }
+
+  private _getPoolEndPatch() {
+    const plugin = this;
+    return (originalEnd: typeof pgPoolTypes.prototype.end) => {
+      return function end(this: PgPoolExtended, callback?: () => void) {
+        try {
+          return callback
+            ? originalEnd.call(this, callback)
+            : (originalEnd as (this: PgPoolExtended) => Promise<void>).call(
+                this
+              );
+        } finally {
+          if (this.ending) {
+            plugin._removePoolMax(this);
+          }
+        }
       };
     };
   }

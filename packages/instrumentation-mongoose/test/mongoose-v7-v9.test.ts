@@ -2,18 +2,15 @@
  * Copyright The OpenTelemetry Authors
  * SPDX-License-Identifier: Apache-2.0
  */
-process.env.OTEL_SEMCONV_STABILITY_OPT_IN = 'http/dup,database/dup';
-
 import 'mocha';
 import { expect } from 'expect';
-import { ATTR_DB_OPERATION } from '../src/semconv';
-import { SemconvStability } from '@opentelemetry/instrumentation';
 import { MongooseInstrumentation } from '../src';
+import { ATTR_DB_OPERATION_NAME } from '@opentelemetry/semantic-conventions';
 import {
   getTestSpans,
   registerInstrumentationTesting,
 } from '@opentelemetry/contrib-test-utils';
-import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
+import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 
 const instrumentation = registerInstrumentationTesting(
   new MongooseInstrumentation()
@@ -90,16 +87,11 @@ describe('mongoose instrumentation [v7/v8/v9]', () => {
 
     const spans = getTestSpans();
     expect(spans.length).toBe(1);
-    assertSpan(
-      spans[0] as ReadableSpan,
-      SemconvStability.OLD | SemconvStability.STABLE,
-      SemconvStability.OLD | SemconvStability.STABLE
+    assertSpan(spans[0] as ReadableSpan);
+    expect(spans[0].attributes[ATTR_DB_OPERATION_NAME]).toBe(
+      'findOneAndUpdate'
     );
-    expect(spans[0].attributes[ATTR_DB_OPERATION]).toBe('findOneAndUpdate');
-    const statement = getStatement(
-      spans[0] as ReadableSpan,
-      SemconvStability.OLD | SemconvStability.STABLE
-    );
+    const statement = getStatement(spans[0] as ReadableSpan);
     expect(statement.options).toEqual({});
     expect(statement.condition).toEqual({ email: 'john.doe@example.com' });
     expect(statement.updates).toEqual({ isUpdated: true });

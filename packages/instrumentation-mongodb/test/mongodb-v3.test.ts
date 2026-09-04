@@ -3,13 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// By default tests run with both old and stable semconv. Some test cases
-// specifically test the various values of OTEL_SEMCONV_STABILITY_OPT_IN.
-process.env.OTEL_SEMCONV_STABILITY_OPT_IN = 'http/dup,database/dup';
-
 import { context, trace, Span } from '@opentelemetry/api';
 import * as assert from 'assert';
-import { SemconvStability } from '@opentelemetry/instrumentation';
 import { MongoDBInstrumentation, MongoDBInstrumentationConfig } from '../src';
 import { MongoResponseHookInformation } from '../src';
 import {
@@ -25,10 +20,10 @@ const instrumentation = registerInstrumentationTesting(new MongoDBInstrumentatio
 import type { MongoClient, Collection } from 'mongodb';
 import { assertSpans, accessCollection, DEFAULT_MONGO_HOST } from './utils';
 import {
-  ATTR_DB_STATEMENT,
-  ATTR_NET_PEER_NAME,
-  ATTR_NET_PEER_PORT,
-} from '../src/semconv';
+  ATTR_DB_QUERY_TEXT,
+  ATTR_SERVER_ADDRESS,
+  ATTR_SERVER_PORT,
+} from '@opentelemetry/semantic-conventions';
 
 describe('MongoDBInstrumentation-Tracing-v3', () => {
   function create(config: MongoDBInstrumentationConfig = {}) {
@@ -109,13 +104,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .insertMany(insertData)
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'insert',
-              COLLECTION_NAME,
-              undefined
-            );
+            assertSpans(getTestSpans(), 'insert', COLLECTION_NAME);
             done();
           })
           .catch(err => {
@@ -131,13 +120,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .updateOne({ a: 2 }, { $set: { b: 1 } })
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'update',
-              COLLECTION_NAME,
-              undefined
-            );
+            assertSpans(getTestSpans(), 'update', COLLECTION_NAME);
             done();
           })
           .catch(err => {
@@ -153,13 +136,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .deleteOne({ a: 3 })
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'remove',
-              COLLECTION_NAME,
-              undefined
-            );
+            assertSpans(getTestSpans(), 'remove', COLLECTION_NAME);
             done();
           })
           .catch(err => {
@@ -179,13 +156,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .toArray()
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'find',
-              COLLECTION_NAME,
-              undefined
-            );
+            assertSpans(getTestSpans(), 'find', COLLECTION_NAME);
             done();
           })
           .catch(err => {
@@ -210,20 +181,16 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
                 getTestSpans().filter(
                   span => !span.name.includes(`getMore ${COLLECTION_NAME}`)
                 ),
-                SemconvStability.DUPLICATE,
                 'find',
-                COLLECTION_NAME,
-                undefined
+                COLLECTION_NAME
               );
               // assert that we correctly got the first as a find
               assertSpans(
                 getTestSpans().filter(
                   span => !span.name.includes(`find ${COLLECTION_NAME}`)
                 ),
-                SemconvStability.DUPLICATE,
                 'getMore',
-                COLLECTION_NAME,
-                undefined
+                COLLECTION_NAME
               );
               done();
             })
@@ -244,13 +211,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .createIndex({ a: 1 })
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'createIndexes',
-              '$cmd',
-              undefined
-            );
+            assertSpans(getTestSpans(), 'createIndexes', '$cmd');
             done();
           })
           .catch(err => {
@@ -270,13 +231,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .toArray()
           .then(() => {
             span.end();
-            assertSpans(
-              getTestSpans(),
-              SemconvStability.DUPLICATE,
-              'aggregate',
-              '$cmd',
-              undefined
-            );
+            assertSpans(getTestSpans(), 'aggregate', '$cmd');
             done();
           })
           .catch(err => {
@@ -305,22 +260,14 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .then(() => {
             span.end();
             const spans = getTestSpans();
-            assertSpans(
-              spans,
-              SemconvStability.DUPLICATE,
-              'insert',
-              COLLECTION_NAME,
-              undefined,
-              false,
-              false
-            );
+            assertSpans(spans, 'insert', COLLECTION_NAME, false, false);
             const mongoSpan = spans.find(
               s =>
                 s.instrumentationScope.name ===
                 '@opentelemetry/instrumentation-mongodb'
             );
             const dbStatement = JSON.parse(
-              mongoSpan!.attributes[ATTR_DB_STATEMENT] as string
+              mongoSpan!.attributes[ATTR_DB_QUERY_TEXT] as string
             );
             assert.strictEqual(dbStatement[key], '?');
             done();
@@ -343,22 +290,14 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
           .then(() => {
             span.end();
             const spans = getTestSpans();
-            assertSpans(
-              spans,
-              SemconvStability.DUPLICATE,
-              'aggregate',
-              '$cmd',
-              undefined,
-              false,
-              false
-            );
+            assertSpans(spans, 'aggregate', '$cmd', false, false);
             const mongoSpan = spans.find(
               s =>
                 s.instrumentationScope.name ===
                 '@opentelemetry/instrumentation-mongodb'
             );
             const dbStatement = JSON.parse(
-              mongoSpan!.attributes[ATTR_DB_STATEMENT] as string
+              mongoSpan!.attributes[ATTR_DB_QUERY_TEXT] as string
             );
             assert.deepEqual(dbStatement, {
               aggregate: '?',
@@ -399,22 +338,14 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
             .then(() => {
               span.end();
               const spans = getTestSpans();
-              assertSpans(
-                spans,
-                SemconvStability.DUPLICATE,
-                'insert',
-                COLLECTION_NAME,
-                undefined,
-                false,
-                true
-              );
+              assertSpans(spans, 'insert', COLLECTION_NAME, false, true);
               const mongoSpan = spans.find(
                 s =>
                   s.instrumentationScope.name ===
                   '@opentelemetry/instrumentation-mongodb'
               );
               const dbStatement = JSON.parse(
-                mongoSpan!.attributes[ATTR_DB_STATEMENT] as string
+                mongoSpan!.attributes[ATTR_DB_QUERY_TEXT] as string
               );
               assert.strictEqual(dbStatement[key], value);
               done();
@@ -444,13 +375,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
             .then(() => {
               span.end();
               const spans = getTestSpans();
-              assertSpans(
-                spans,
-                SemconvStability.DUPLICATE,
-                'insert',
-                COLLECTION_NAME,
-                undefined
-              );
+              assertSpans(spans, 'insert', COLLECTION_NAME);
               done();
             })
             .catch(err => {
@@ -547,13 +472,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
             .then(() => {
               span.end();
               const spans = getTestSpans();
-              assertSpans(
-                spans,
-                SemconvStability.DUPLICATE,
-                'find',
-                COLLECTION_NAME,
-                undefined
-              );
+              assertSpans(spans, 'find', COLLECTION_NAME);
               done();
             })
             .catch(err => {
@@ -575,13 +494,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
             span.end();
             const spans = getTestSpans();
             const mainSpan = spans[spans.length - 1];
-            assertSpans(
-              spans,
-              SemconvStability.DUPLICATE,
-              'insert',
-              COLLECTION_NAME,
-              undefined
-            );
+            assertSpans(spans, 'insert', COLLECTION_NAME);
             resetMemoryExporter();
 
             collection
@@ -591,13 +504,7 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
                 const spans2 = getTestSpans();
                 spans2.push(mainSpan);
 
-                assertSpans(
-                  spans2,
-                  SemconvStability.DUPLICATE,
-                  'find',
-                  COLLECTION_NAME,
-                  undefined
-                );
+                assertSpans(spans2, 'find', COLLECTION_NAME);
                 assert.strictEqual(
                   mainSpan.spanContext().spanId,
                   spans2[0].parentSpanContext?.spanId
@@ -653,11 +560,11 @@ describe('MongoDBInstrumentation-Tracing-v3', () => {
             (err, address) => {
               if (err) return done(err);
               assert.strictEqual(
-                mongoSpan.attributes[ATTR_NET_PEER_NAME],
+                mongoSpan.attributes[ATTR_SERVER_ADDRESS],
                 address
               );
               assert.strictEqual(
-                mongoSpan.attributes[ATTR_NET_PEER_PORT],
+                mongoSpan.attributes[ATTR_SERVER_PORT],
                 process.env.MONGODB_PORT
                   ? parseInt(process.env.MONGODB_PORT)
                   : 27017
