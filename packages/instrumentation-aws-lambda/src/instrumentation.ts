@@ -48,7 +48,7 @@ import {
   LambdaAttributes,
   TriggerOrigin,
 } from './triggers';
-import { ReadableSpan } from '@opentelemetry/sdk-trace-base';
+import { ReadableSpan } from '@opentelemetry/sdk-trace';
 
 diag.debug('Loading AwsLambdaInstrumentation');
 
