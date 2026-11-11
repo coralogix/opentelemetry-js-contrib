@@ -16,7 +16,7 @@
 import { SpanFinalizer } from '../common';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
-import { APIGatewayProxyResult } from 'aws-lambda';
+import type { APIGatewayProxyResult } from 'aws-lambda';
 
 const DEFAULT_OTEL_PAYLOAD_SIZE_LIMIT = 50 * 1024;
 
@@ -29,7 +29,11 @@ export function isGatewayResult(result: any): result is APIGatewayProxyResult {
   );
 }
 
-export const finalizeApiGatewaySpan: SpanFinalizer = (span, response, config) => {
+export const finalizeApiGatewaySpan: SpanFinalizer = (
+  span,
+  response,
+  config
+) => {
   if (!isGatewayResult(response)) {
     return;
   }
@@ -54,7 +58,8 @@ export const finalizeApiGatewaySpan: SpanFinalizer = (span, response, config) =>
 
   if (body) {
     const bodyStr = typeof body === 'object' ? JSON.stringify(body) : body;
-    const payloadSizeLimit = config?.payloadSizeLimit ?? DEFAULT_OTEL_PAYLOAD_SIZE_LIMIT;
+    const payloadSizeLimit =
+      config?.payloadSizeLimit ?? DEFAULT_OTEL_PAYLOAD_SIZE_LIMIT;
     span.setAttribute(
       'http.response.body',
       bodyStr.substring(0, payloadSizeLimit)

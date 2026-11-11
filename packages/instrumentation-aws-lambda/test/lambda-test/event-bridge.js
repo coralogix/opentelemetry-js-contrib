@@ -22,4 +22,4 @@ exports.handler = async function (event, context) {
 
 exports.errorAsync = async function (event, context) {
   throw new Error('handler error');
-}
+};

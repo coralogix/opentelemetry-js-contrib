@@ -22,36 +22,36 @@ exports.handler = async function (event, context) {
 
 exports.error500 = async function (event, context) {
   return { statusCode: 500 };
-}
+};
 
 exports.error400 = async function (event, context) {
   return { statusCode: 400 };
-}
+};
 
 exports.error500Sync = async function (event, context) {
   return { statusCode: 500 };
-}
+};
 
-exports.error400Sync =  function (event, context, callback) {
-  return callback( undefined, { statusCode: 400 } );
-}
+exports.error400Sync = function (event, context, callback) {
+  return callback(undefined, { statusCode: 400 });
+};
 
 exports.errorAsync = async function (event, context) {
   throw new Error('handler error');
-}
+};
 
-exports.errorSync =  function (event, context) {
+exports.errorSync = function (event, context) {
   throw new Error('handler error');
-}
+};
 
 exports.stringBody = async function (event, context) {
   return { statusCode: 200, body: 'string-response' };
 };
 
 exports.jsonBody = async function (event, context) {
-  return { statusCode: 200, body: {val: 'json-response'} };
+  return { statusCode: 200, body: { val: 'json-response' } };
 };
 
 exports.invalidApiGatewayResponse = async function (event, context) {
-  return { myKey: 'myValue'};
+  return { myKey: 'myValue' };
 };

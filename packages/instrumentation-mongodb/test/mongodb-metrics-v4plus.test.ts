@@ -19,7 +19,9 @@ const otelTestingMeterProvider = new MeterProvider({
 
 import { registerInstrumentationTesting } from '@opentelemetry/contrib-test-utils';
 // @ts-ignore
-const instrumentation = registerInstrumentationTesting(new MongoDBInstrumentation());
+const instrumentation = registerInstrumentationTesting(
+  new MongoDBInstrumentation()
+);
 
 import { accessCollection, DEFAULT_MONGO_HOST } from './utils';
 import type { MongoClient, Collection } from 'mongodb';

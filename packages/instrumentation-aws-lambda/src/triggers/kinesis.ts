@@ -15,7 +15,7 @@
  */
 import { Attributes, SpanKind } from '@opentelemetry/api';
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
-import { KinesisStreamEvent } from 'aws-lambda';
+import type { KinesisStreamEvent } from 'aws-lambda';
 import {
   LambdaTrigger,
   TriggerSpanInitializerResult,
@@ -23,10 +23,9 @@ import {
 } from './common';
 import { TriggerOrigin } from './index';
 
-const isKinesisEvent = validateRecordsEvent<KinesisStreamEvent>(
-  'aws:kinesis',
-  ['kinesis']
-);
+const isKinesisEvent = validateRecordsEvent<KinesisStreamEvent>('aws:kinesis', [
+  'kinesis',
+]);
 
 function initializeKinesisSpan(
   event: KinesisStreamEvent

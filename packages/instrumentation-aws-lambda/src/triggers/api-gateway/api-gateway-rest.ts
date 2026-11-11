@@ -20,7 +20,7 @@ import {
 } from '@opentelemetry/semantic-conventions';
 import { xForwardProto } from '../../instrumentation';
 import { LambdaTrigger, TriggerSpanInitializerResult } from '../common';
-import { APIGatewayProxyEvent } from 'aws-lambda';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { finalizeApiGatewaySpan } from './common';
 import { TriggerOrigin } from '../index';
 

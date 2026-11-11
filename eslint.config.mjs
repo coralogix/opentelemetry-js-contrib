@@ -27,6 +27,26 @@ const defaultLicense = `
 const licensePattern =
   /^\/\*\n \* Copyright The OpenTelemetry Authors(?:, [^\n]+)*\n(?: \* Copyright [^\n]+\n)* \* SPDX-License-Identifier: Apache-2.0\n \*\/$/;
 
+// Preserve the original full Apache-2.0 header in fork-maintained files.
+const legacyLicense = `/*
+ * Copyright The OpenTelemetry Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */`;
+const legacyLicensePattern = new RegExp(
+  `^${legacyLicense.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`
+);
+
 const baseConfig = tseslint.config(
   {
     ignores: [
@@ -64,7 +84,7 @@ const baseConfig = tseslint.config(
         'error',
         {
           header: defaultLicense,
-          allowedHeaderPatterns: [licensePattern],
+          allowedHeaderPatterns: [licensePattern, legacyLicensePattern],
         },
       ],
 
@@ -214,6 +234,25 @@ const baseConfig = tseslint.config(
     files: ['**/packages/instrumentation-*/**'],
     rules: {
       '@typescript-eslint/explicit-member-accessibility': 'off',
+    },
+  },
+
+  // Build tooling configs (e.g. tsdown.config.ts) live outside each package's
+  // tsconfig include globs, so the project service can't resolve them. The
+  // root tsconfig includes them (no per-package rootDir, so the shared
+  // `../tsdown.config.ts` import resolves); point them at it via classic
+  // `project` and skip the license header.
+  {
+    files: ['**/*.config.ts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      'yet-another-license-header/header': 'off',
     },
   }
 );

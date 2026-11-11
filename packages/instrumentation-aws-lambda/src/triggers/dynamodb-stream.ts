@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { DynamoDBStreamEvent } from 'aws-lambda/trigger/dynamodb-stream';
+import type { DynamoDBStreamEvent } from 'aws-lambda/trigger/dynamodb-stream';
 import {
   LambdaTrigger,
   TriggerSpanInitializerResult,
@@ -21,7 +21,10 @@ import {
 } from './common';
 import { isDefined } from '../utils';
 import { Attributes, SpanKind } from '@opentelemetry/api';
-import { DBSYSTEMVALUES_DYNAMODB, SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import {
+  DBSYSTEMVALUES_DYNAMODB,
+  SemanticAttributes,
+} from '@opentelemetry/semantic-conventions';
 import { TriggerOrigin } from './index';
 
 export const isDynamoDBStreamEvent =
@@ -63,9 +66,8 @@ function initalizeDynamoDBStreamSpan(
   };
 
   if (tableNames.length > 0) {
-    attributes[
-      SemanticAttributes.AWS_DYNAMODB_TABLE_NAMES
-    ] = `[${tableNames.join(', ')}]`;
+    attributes[SemanticAttributes.AWS_DYNAMODB_TABLE_NAMES] =
+      `[${tableNames.join(', ')}]`;
   }
   const name = 'dynamo stream';
   const options = {

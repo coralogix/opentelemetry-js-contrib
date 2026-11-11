@@ -27,7 +27,12 @@ import {
   AWSXRAY_TRACE_ID_HEADER,
   AWSXRayPropagator,
 } from '@opentelemetry/propagator-aws-xray';
-import { APIGatewayProxyEventHeaders, SQSEvent, SQSMessageAttributes, SQSRecord } from 'aws-lambda';
+import type {
+  APIGatewayProxyEventHeaders,
+  SQSEvent,
+  SQSMessageAttributes,
+  SQSRecord,
+} from 'aws-lambda';
 import { isDefined } from '../utils';
 import {
   LambdaTrigger,

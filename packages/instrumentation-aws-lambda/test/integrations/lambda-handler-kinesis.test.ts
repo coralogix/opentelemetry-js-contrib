@@ -1,10 +1,6 @@
 /*
  * Copyright The OpenTelemetry Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import * as path from 'path';
@@ -38,17 +34,20 @@ const kinesisEvent: KinesisStreamEvent = {
       kinesis: {
         kinesisSchemaVersion: '1.0',
         partitionKey: '1',
-        sequenceNumber: '49590338271490256608559692538361571095921575989136588898',
+        sequenceNumber:
+          '49590338271490256608559692538361571095921575989136588898',
         data: 'VGVzdCBtZXNzYWdl',
         approximateArrivalTimestamp: 1545084650.987,
       },
       eventSource: 'aws:kinesis',
       eventVersion: '1.0',
-      eventID: 'shardId-000000000006:49590338271490256608559692538361571095921575989136588898',
+      eventID:
+        'shardId-000000000006:49590338271490256608559692538361571095921575989136588898',
       eventName: 'aws:kinesis:record',
       invokeIdentityArn: 'arn:aws:iam::123456789012:role/lambda-role',
       awsRegion: 'eu-west-1',
-      eventSourceARN: 'arn:aws:kinesis:eu-west-1:123456789012:stream/test-stream',
+      eventSourceARN:
+        'arn:aws:kinesis:eu-west-1:123456789012:stream/test-stream',
     },
   ],
 };

@@ -19,7 +19,7 @@ import {
   validateRecordsEvent,
 } from './common';
 import { Attributes, SpanKind } from '@opentelemetry/api';
-import { SESEvent } from 'aws-lambda';
+import type { SESEvent } from 'aws-lambda';
 import { TriggerOrigin } from './index';
 
 const isSESEvent = validateRecordsEvent<SESEvent>('aws:ses', ['ses']);

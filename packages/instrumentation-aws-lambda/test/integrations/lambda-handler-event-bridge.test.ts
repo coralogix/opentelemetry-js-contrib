@@ -15,7 +15,6 @@
  */
 
 // We access through node_modules to allow it to be patched.
-/* eslint-disable node/no-extraneous-require */
 
 import * as path from 'path';
 
@@ -154,7 +153,10 @@ describe('Event Bridge handler', () => {
       assertSpanSuccess(spanLambda);
       assertEventBridgeSpan(ebSpan, exampleEventWithLink);
       assert.strictEqual(ebSpan.parentSpanContext?.spanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanContext?.spanId, ebSpan.spanContext().spanId);
+      assert.strictEqual(
+        spanLambda.parentSpanContext?.spanId,
+        ebSpan.spanContext().spanId
+      );
     });
 
     it(`EventBridge span links should be extracted from event details under the '${EVENT_BRIDGE_CONTEXT_KEY}' key`, async () => {

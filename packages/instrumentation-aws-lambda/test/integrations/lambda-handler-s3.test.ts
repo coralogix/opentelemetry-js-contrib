@@ -15,7 +15,6 @@
  */
 
 // We access through node_modules to allow it to be patched.
-/* eslint-disable node/no-extraneous-require */
 
 import * as path from 'path';
 
@@ -164,7 +163,10 @@ describe('S3 handler', () => {
       assertSpanSuccess(spanLambda);
       assertS3EventSpanSuccess(sqsSpan, s3Event);
       assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(
+        spanLambda.parentSpanContext?.spanId,
+        sqsSpan.spanContext().spanId
+      );
     });
 
     it('should export two valid span', async () => {
@@ -178,7 +180,10 @@ describe('S3 handler', () => {
       assertSpanSuccess(spanLambda);
       assertS3EventSpanSuccess(sqsSpan, s3Event);
       assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(
+        spanLambda.parentSpanContext?.spanId,
+        sqsSpan.spanContext().spanId
+      );
     });
   });
 });

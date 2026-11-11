@@ -198,5 +198,4 @@ describe('Step Functions Trigger', () => {
       'StateMachine-tYitg6Hm7nTT'
     );
   });
-
 });
