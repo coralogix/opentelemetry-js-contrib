@@ -15,7 +15,6 @@
  */
 
 // We access through node_modules to allow it to be patched.
-/* eslint-disable node/no-extraneous-require */
 
 import * as path from 'path';
 
@@ -243,7 +242,10 @@ describe('SQS handler', () => {
       assertSpanSuccess(spanLambda);
       assertSQSEventSpanSuccess(sqsSpan, sqsRecord1.eventSourceARN);
       assert.strictEqual(sqsSpan.parentSpanContext?.spanId, undefined);
-      assert.strictEqual(spanLambda.parentSpanContext?.spanId, sqsSpan.spanContext().spanId);
+      assert.strictEqual(
+        spanLambda.parentSpanContext?.spanId,
+        sqsSpan.spanContext().spanId
+      );
     });
 
     it('sqs span should reject when throwing error', async () => {

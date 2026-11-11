@@ -27,7 +27,11 @@ export interface TriggerSpanInitializerResult {
 export type TriggerSpanInitializer<T> = (
   event: T
 ) => TriggerSpanInitializerResult;
-export type SpanFinalizer = (span: Span, response?: any, config?: AwsLambdaInstrumentationConfig) => void;
+export type SpanFinalizer = (
+  span: Span,
+  response?: any,
+  config?: AwsLambdaInstrumentationConfig
+) => void;
 
 export interface LambdaTrigger<T> {
   validator: TriggerValidator<T>;
@@ -36,29 +40,39 @@ export interface LambdaTrigger<T> {
 }
 
 export const validateRecord =
-  (recordSource: string, eventSourceField: string, additionalRecordFields?: string[]) =>
-    (record: any) => {
-      return (
-        record &&
-        typeof record === 'object' &&
-        eventSourceField in record &&
-        record[eventSourceField] === recordSource &&
-        (additionalRecordFields
-          ? additionalRecordFields.every(
+  (
+    recordSource: string,
+    eventSourceField: string,
+    additionalRecordFields?: string[]
+  ) =>
+  (record: any) => {
+    return (
+      record &&
+      typeof record === 'object' &&
+      eventSourceField in record &&
+      record[eventSourceField] === recordSource &&
+      (additionalRecordFields
+        ? additionalRecordFields.every(
             field => field in record && typeof record[field] === 'object'
           )
-          : true)
-      );
-    };
+        : true)
+    );
+  };
 
 export const validateRecordsEvent =
-  <T>(recordSource: string, additionalRecordFields?: string[], eventSourceField: string = "eventSource") =>
-    (event: any): event is T => {
-      return (
-        event &&
-        typeof event === 'object' &&
-        'Records' in event &&
-        Array.isArray(event.Records) &&
-        event.Records.every(validateRecord(recordSource, eventSourceField, additionalRecordFields))
-      );
-    };
+  <T>(
+    recordSource: string,
+    additionalRecordFields?: string[],
+    eventSourceField = 'eventSource'
+  ) =>
+  (event: any): event is T => {
+    return (
+      event &&
+      typeof event === 'object' &&
+      'Records' in event &&
+      Array.isArray(event.Records) &&
+      event.Records.every(
+        validateRecord(recordSource, eventSourceField, additionalRecordFields)
+      )
+    );
+  };

@@ -23,7 +23,7 @@ import {
   trace,
 } from '@opentelemetry/api';
 import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
-import { SNSEvent, SNSEventRecord } from 'aws-lambda';
+import type { SNSEvent, SNSEventRecord } from 'aws-lambda';
 import { isDefined } from '../utils';
 import {
   LambdaTrigger,

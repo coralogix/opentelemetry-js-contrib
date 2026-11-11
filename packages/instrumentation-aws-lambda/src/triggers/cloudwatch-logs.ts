@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { CloudWatchLogsEvent } from 'aws-lambda';
+import type { CloudWatchLogsEvent } from 'aws-lambda';
 import { Attributes, SpanKind } from '@opentelemetry/api';
 import { LambdaTrigger, TriggerSpanInitializerResult } from './common';
 import { TriggerOrigin } from './index';

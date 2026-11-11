@@ -31,7 +31,7 @@ import { ATTR_URL_FULL } from '@opentelemetry/semantic-conventions';
 import { ATTR_CLOUD_ACCOUNT_ID, ATTR_FAAS_COLDSTART } from './semconv';
 import { ATTR_FAAS_EXECUTION, ATTR_FAAS_ID } from './semconv-obsolete';
 
-import {
+import type {
   APIGatewayProxyEventHeaders,
   Callback,
   Context,
@@ -117,9 +117,9 @@ function isSupportingCallbacks(): boolean {
 }
 
 export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstrumentationConfig> {
-  private declare _traceForceFlusher?: () => Promise<void>;
-  private declare _metricForceFlusher?: () => Promise<void>;
-  private declare config: AwsLambdaInstrumentationConfig;
+  declare private _traceForceFlusher?: () => Promise<void>;
+  declare private _metricForceFlusher?: () => Promise<void>;
+  declare private config: AwsLambdaInstrumentationConfig;
 
   constructor(config: AwsLambdaInstrumentationConfig = {}) {
     super(PACKAGE_NAME, PACKAGE_VERSION, config);
@@ -181,22 +181,25 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       ) {
         _onRequest();
 
-        return plugin._before_execution(event, context, requestIsColdStart).then(
-          instrCtx =>
-            otelContext.with(
-              trace.setSpan(
-                instrCtx.invocationParentContext,
-                instrCtx.invocationSpan
+        return plugin
+          ._before_execution(event, context, requestIsColdStart)
+          .then(
+            instrCtx =>
+              otelContext.with(
+                trace.setSpan(
+                  instrCtx.invocationParentContext,
+                  instrCtx.invocationSpan
+                ),
+                () =>
+                  plugin._executePromiseHandler(
+                    () =>
+                      original.apply(this, [event, responseStream, context]),
+                    context,
+                    instrCtx
+                  )
               ),
-              () =>
-                plugin._executePromiseHandler(
-                  () => original.apply(this, [event, responseStream, context]),
-                  context,
-                  instrCtx
-                )
-            ),
-          err => plugin._handleBeforeExecutionFailurePromise(err, context)
-        );
+            err => plugin._handleBeforeExecutionFailurePromise(err, context)
+          );
       };
     }
 
@@ -212,46 +215,48 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       ) {
         _onRequest();
 
-        return plugin._before_execution(event, context, requestIsColdStart).then(
-          instrCtx =>
-            otelContext.with(
-              trace.setSpan(
-                instrCtx.invocationParentContext,
-                instrCtx.invocationSpan
-              ),
-              () => {
-                if (callback) {
-                  plugin._invokeWithCallback(
-                    original as Handler,
-                    this,
-                    event,
+        return plugin
+          ._before_execution(event, context, requestIsColdStart)
+          .then(
+            instrCtx =>
+              otelContext.with(
+                trace.setSpan(
+                  instrCtx.invocationParentContext,
+                  instrCtx.invocationSpan
+                ),
+                () => {
+                  if (callback) {
+                    plugin._invokeWithCallback(
+                      original as Handler,
+                      this,
+                      event,
+                      context,
+                      callback,
+                      instrCtx
+                    );
+                    return;
+                  }
+
+                  return plugin._executePromiseHandler(
+                    () =>
+                      (original as (event: any, context: Context) => any).apply(
+                        this,
+                        [event, context]
+                      ),
                     context,
-                    callback,
                     instrCtx
                   );
-                  return;
                 }
-
-                return plugin._executePromiseHandler(
-                  () =>
-                    (original as (event: any, context: Context) => any).apply(
-                      this,
-                      [event, context]
-                    ),
-                  context,
-                  instrCtx
-                );
-              }
-            ),
-          err =>
-            callback
-              ? plugin._handleBeforeExecutionFailureCallback(
-                  err,
-                  context,
-                  callback
-                )
-              : plugin._handleBeforeExecutionFailurePromise(err, context)
-        );
+              ),
+            err =>
+              callback
+                ? plugin._handleBeforeExecutionFailureCallback(
+                    err,
+                    context,
+                    callback
+                  )
+                : plugin._handleBeforeExecutionFailurePromise(err, context)
+          );
       };
     }
 
@@ -507,10 +512,9 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
           [ATTR_FAAS_EXECUTION]: context.awsRequestId,
           [SPAN_ROLE_ATTRIBUTE]: 'invocation',
           [ATTR_FAAS_ID]: context.invokedFunctionArn,
-          [ATTR_CLOUD_ACCOUNT_ID]:
-            AwsLambdaInstrumentation._extractAccountId(
-              context.invokedFunctionArn
-            ),
+          [ATTR_CLOUD_ACCOUNT_ID]: AwsLambdaInstrumentation._extractAccountId(
+            context.invokedFunctionArn
+          ),
           [ATTR_FAAS_COLDSTART]: requestIsColdStart,
           ...AwsLambdaInstrumentation._extractOtherEventFields(event),
         },
@@ -556,7 +560,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   ): Callback {
     return (err, res) => {
       diag.debug('executing wrapped callback function');
-      this._after_execution(instrumentationContext, err, res).then(() => {
+      void this._after_execution(instrumentationContext, err, res).then(() => {
         diag.debug('executing original callback function');
         originalAWSLambdaCallback.apply(this, [err, res]); // End of the function
       });
@@ -572,20 +576,25 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     callback: Callback,
     instrumentationContext: InstrumentationContext
   ): void {
-    const wrappedCallback = this._wrapCallback(callback, instrumentationContext);
+    const wrappedCallback = this._wrapCallback(
+      callback,
+      instrumentationContext
+    );
 
     let maybePromise: unknown;
     try {
       maybePromise = original.apply(thisArg, [event, context, wrappedCallback]);
     } catch (err) {
       diag.debug('handler threw synchronously');
-      this._after_execution(instrumentationContext, err as Error, undefined).then(
-        () => {
-          this._markEventLoopDontWait(context);
-          diag.debug('calling AWS callback');
-          callback(err as Error, undefined);
-        }
-      );
+      void this._after_execution(
+        instrumentationContext,
+        err as Error,
+        undefined
+      ).then(() => {
+        this._markEventLoopDontWait(context);
+        diag.debug('calling AWS callback');
+        callback(err as Error, undefined);
+      });
       return;
     }
 
@@ -598,13 +607,15 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
       Promise.resolve(maybePromise).then(
         (value: unknown) => {
           diag.debug('handler promise completed');
-          return this._after_execution(instrumentationContext, undefined, value).then(
-            () => {
-              this._markEventLoopDontWait(context);
-              diag.debug('calling AWS callback');
-              callback(undefined, value);
-            }
-          );
+          return this._after_execution(
+            instrumentationContext,
+            undefined,
+            value
+          ).then(() => {
+            this._markEventLoopDontWait(context);
+            diag.debug('calling AWS callback');
+            callback(undefined, value);
+          });
         },
         (err: unknown) => {
           diag.debug('handler promise failed');
@@ -612,13 +623,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
             instrumentationContext,
             err as Error | string,
             undefined
-          ).then(
-            () => {
-              this._markEventLoopDontWait(context);
-              diag.debug('calling AWS callback');
-              callback(err as Error | string, undefined);
-            }
-          );
+          ).then(() => {
+            this._markEventLoopDontWait(context);
+            diag.debug('calling AWS callback');
+            callback(err as Error | string, undefined);
+          });
         }
       );
     } else {
@@ -649,11 +658,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     ) {
       return Promise.resolve(maybePromise).then(
         (value: unknown) =>
-          this._handlePromiseResolution(
-            value,
-            context,
-            instrumentationContext
-          ),
+          this._handlePromiseResolution(value, context, instrumentationContext),
         (err: unknown) =>
           this._handlePromiseRejection(
             err as Error | string,

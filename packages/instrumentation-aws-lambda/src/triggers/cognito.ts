@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { BaseTriggerEvent as CognitoBaseTriggerEvent } from 'aws-lambda/trigger/cognito-user-pool-trigger/_common';
+import type { BaseTriggerEvent as CognitoBaseTriggerEvent } from 'aws-lambda/trigger/cognito-user-pool-trigger/_common';
 import { Attributes, SpanKind } from '@opentelemetry/api';
 import { LambdaTrigger, TriggerSpanInitializerResult } from './common';
 import { TriggerOrigin } from './index';

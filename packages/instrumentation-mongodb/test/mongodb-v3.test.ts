@@ -15,7 +15,9 @@ import {
 import { lookup } from 'dns';
 
 // @ts-ignore
-const instrumentation = registerInstrumentationTesting(new MongoDBInstrumentation());
+const instrumentation = registerInstrumentationTesting(
+  new MongoDBInstrumentation()
+);
 
 import type { MongoClient, Collection } from 'mongodb';
 import { assertSpans, accessCollection, DEFAULT_MONGO_HOST } from './utils';

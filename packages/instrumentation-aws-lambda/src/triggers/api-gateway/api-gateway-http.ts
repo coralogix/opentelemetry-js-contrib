@@ -21,7 +21,7 @@ import {
 import { xForwardProto } from '../../instrumentation';
 import { LambdaTrigger, TriggerSpanInitializerResult } from '../common';
 import { finalizeApiGatewaySpan } from './common';
-import { APIGatewayProxyEventV2 } from 'aws-lambda/trigger/api-gateway-proxy';
+import type { APIGatewayProxyEventV2 } from 'aws-lambda/trigger/api-gateway-proxy';
 import { TriggerOrigin } from '../index';
 
 function isHttpApiGatewayEvent(event: any): event is APIGatewayProxyEventV2 {
