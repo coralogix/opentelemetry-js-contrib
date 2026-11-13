@@ -22,6 +22,7 @@ import {
   TraceFlags,
   TracerProvider,
   Attributes,
+  LoggerProvider,
 } from '@opentelemetry/api';
 import {
   AWSXRAY_TRACE_ID_HEADER,
@@ -49,6 +50,7 @@ import {
   TriggerOrigin,
 } from './triggers';
 import { ReadableSpan } from '@opentelemetry/sdk-trace';
+import { redactUrl } from './redact-url';
 
 diag.debug('Loading AwsLambdaInstrumentation');
 
@@ -120,6 +122,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
   declare private _traceForceFlusher?: () => Promise<void>;
   declare private _metricForceFlusher?: () => Promise<void>;
   declare private config: AwsLambdaInstrumentationConfig;
+  declare private _logForceFlusher?: () => Promise<void>;
 
   constructor(config: AwsLambdaInstrumentationConfig = {}) {
     super(PACKAGE_NAME, PACKAGE_VERSION, config);
@@ -739,7 +742,11 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
 
   // never fails
   private async _flush(): Promise<void> {
-    await Promise.all([this._flush_trace(), this._flush_metric()]);
+    await Promise.all([
+      this._flush_trace(),
+      this._flush_metric(),
+      this._flush_log(),
+    ]);
   }
 
   // never fails
@@ -768,6 +775,21 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     } else {
       diag.error(
         'Metrics may not be exported for the lambda function because we are not force flushing before callback.'
+      );
+    }
+  }
+
+  // never fails
+  private async _flush_log(): Promise<void> {
+    if (this._logForceFlusher) {
+      try {
+        await this._logForceFlusher();
+      } catch (e) {
+        diag.error('Error while flushing logs', e);
+      }
+    } else {
+      diag.debug(
+        'Logs may not be exported for the lambda function because we are not force flushing before handler completion.'
       );
     }
   }
@@ -828,6 +850,35 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     return undefined;
   }
 
+  override setLoggerProvider(loggerProvider: LoggerProvider) {
+    super.setLoggerProvider(loggerProvider);
+    this._logForceFlusher = this._logForceFlush(loggerProvider);
+  }
+
+  private _logForceFlush(loggerProvider: LoggerProvider) {
+    if (!loggerProvider) return undefined;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let currentProvider: any = loggerProvider;
+
+    // A LoggerProvider obtained via the logs API is a delegating
+    // proxy (ProxyLoggerProvider), like ProxyTracerProvider, so unwrap it to
+    // reach the SDK provider that actually has forceFlush. The logs proxy
+    // exposes the delegate as _getDelegate(); fall back to getDelegate() for
+    // any provider that uses the non-underscore name.
+    if (typeof currentProvider._getDelegate === 'function') {
+      currentProvider = currentProvider._getDelegate();
+    } else if (typeof currentProvider.getDelegate === 'function') {
+      currentProvider = currentProvider.getDelegate();
+    }
+
+    if (typeof currentProvider.forceFlush === 'function') {
+      return currentProvider.forceFlush.bind(currentProvider);
+    }
+
+    return undefined;
+  }
+
   private _applyResponseHook(
     span: Span,
     err?: Error | string | null,
@@ -864,7 +915,7 @@ export class AwsLambdaInstrumentation extends InstrumentationBase<AwsLambdaInstr
     const answer: Attributes = {};
     const fullUrl = this._extractFullUrl(event);
     if (fullUrl) {
-      answer[ATTR_URL_FULL] = fullUrl;
+      answer[ATTR_URL_FULL] = redactUrl(fullUrl);
     }
     return answer;
   }
